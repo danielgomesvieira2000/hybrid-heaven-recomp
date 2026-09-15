@@ -4,9 +4,11 @@ This is the working record, wrong turns included; it is not rewritten later. Fac
 outlive the phase are also copied into [PORTING.md](../PORTING.md) or
 [GAME-INTERNALS.md](../GAME-INTERNALS.md).
 
-**Gate:** not met yet. The survey half is done and written here. The skeleton half
-(submodules, a phase-gated CMake tree that builds, `--identify` in the executable) waits for
-approval of [PLAN.md](../PLAN.md).
+**Gate:** met (2026-09-15). The phase-gated tree configures and builds with clang-cl + Ninja
+(RelWithDebInfo); `hybrid-heaven-recomp.exe --identify rom.z64` exits 0 and the Pilotwings 64
+dump is rejected with exit 2 (size, cart id, CRC); every submodule patch applies on the first
+run and reports "already applied" on the second; N64Recomp and RSPRecomp build under WSL. The
+survey is below; the skeleton record is at the end.
 
 Reproduce with:
 
@@ -192,3 +194,25 @@ mode, which is not 16:9.
 - Audio: reuse the aspMain RSPRecomp config after re-checking the bytes (done here).
 - Saves: Controller Pak → Daniel's N64ModernRuntime fork, `controller-pak` branch
   (series rule).
+
+## Skeleton (after plan approval)
+
+| What | How | Result |
+|---|---|---|
+| Submodule pins | `git submodule status --recursive` | N64ModernRuntime fork `b0b2b6e` (nested N64Recomp `81213c1`), RT64 `5473732`, RecompFrontend `b1a1477`. RT64 and RecompFrontend nested pins diffed against Wave Race 1.0.2: identical |
+| Fork vs Wave Race's runtime | `git merge-base --is-ancestor cdf5abb b0b2b6e` | ancestor: the fork is Wave Race's upstream pin plus Controller Pak, Rayman 2 fixes (thread-state ABI, SI queue, lookup-failure handler, RSP DMA bound, RDP pacing, VI origin alternation, graphics defaults) and Beetle commits (audio buffer tuning, cooperative preemption support, `set_paused`) |
+| Stack patches | `python tools/patch_all.py` twice | 8 of 9 framework scripts used; 7 applied unchanged, 1 diff re-based (one hunk's context), `patch_librecomp.py` dropped as superseded by the fork's `set_lookup_failure_handler` |
+| Build | `cmake -B build …` + `cmake --build build` | `hybrid-heaven-recomp.exe`, Clang 22.1.8 |
+| `--identify` | our dump / Pilotwings 64 (USA) dump | exit 0 "matches the pinned target" / exit 2 with three named mismatches |
+| Recompiler | `wsl -d Ubuntu -e bash tools/wsl_build_recompiler.sh` | `N64Recomp` and `RSPRecomp` built (patched) |
+| Phase 01 toolchain | WSL | `mips-linux-gnu-as/ld/readelf` present, Python 3.14.4 |
+
+### Negative results (skeleton)
+
+- **Pin trap reproduced.** `git submodule add` → manual `checkout 5473732` →
+  `git submodule update --init --recursive` left RT64 at `4337374` (remote HEAD). Exactly the
+  playbook-01 entry; caught by reading `git submodule status` before staging.
+- **The crash handler did not link in a runtime-less build** (`SymSetOptions`,
+  `SymInitialize` undefined): Wave Race links `dbghelp` only inside `WR64_WITH_RUNTIME`. Harmless
+  there (its phase-00 tree predates the crash handler); here `dbghelp` is linked on every
+  Windows build.

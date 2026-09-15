@@ -6,8 +6,8 @@ here, add a note under *Departures* rather than rewriting the text. Findings go 
 [findings/](findings). Reference facts go in [PORTING.md](PORTING.md) (port) and
 [GAME-INTERNALS.md](GAME-INTERNALS.md) (game).
 
-**Status:** plan written 2026-09-15 and awaiting Daniel's approval. Phase 00 survey done
-([findings/phase-00.md](findings/phase-00.md)); phase 00 skeleton not started.
+**Status:** plan approved by Daniel 2026-09-15 ("looks good, continue autonomously"). The
+session runs autonomously: at each choice the recommended option is taken and logged below.
 
 > **Departures from this plan** (added as they happen):
 >
@@ -93,14 +93,14 @@ Measured in [findings/phase-00.md](findings/phase-00.md) (`tools/identify_rom.py
 |---|---|---|---|---|
 | D1 | ROM revision | USA NHVE / Europe NHVP / Japan NHYJ (SRAM) | **USA NHVE**: the only USA revision; no decomp favours any region | series rule (revision rule) |
 | D2 | Fork or fresh | no existing port of this game | **fresh**, modelled on Wave Race | series rule (nothing to fork) |
-| D3 | Symbol input | ELF from splat on an expanded image / symbols-file mode (Goemon) | **ELF from splat** (above) | *pending Daniel* (plan approval) |
-| D4 | Name donors | mnsg + cv64 decomps (unlicensed), names only / no donors | **names only, by body matching** | *pending Daniel* |
+| D3 | Symbol input | ELF from splat on an expanded image / symbols-file mode (Goemon) | **ELF from splat** (above) | Daniel (plan approval, 2026-09-15) |
+| D4 | Name donors | mnsg + cv64 decomps (unlicensed), names only / no donors | **names only, by body matching** | Daniel (plan approval, 2026-09-15) |
 | D5 | Runtime / renderer / frontend pins | Daniel's N64ModernRuntime fork `controller-pak` `b0b2b6e` (RAY2) / upstream `cdf5abb` (WR64) + Pak reimplementation | **fork `controller-pak`** (series rule for Pak games), RT64 `5473732` and RecompFrontend `b1a1477` (WR64 pins). Phase 00 verifies the fork builds with those pins and that every stack-patch anchor matches | series rule; compatibility measured in phase 00 |
-| D6 | Rumble Pak and Controller Pak | both on one slot (BAR, deliberate hardware deviation) / Pak only, no rumble (RAY2) / pak swap prompt as on hardware | **both on one slot**: saves and rumble with no swap | *pending Daniel* |
+| D6 | Rumble Pak and Controller Pak | both on one slot (BAR, deliberate hardware deviation) / Pak only, no rumble (RAY2) / pak swap prompt as on hardware | **both on one slot**: saves and rumble with no swap | recommended option, autonomous session (2026-09-15) |
 | D7 | Expansion Pak (reported `osMemSize`) | 8 MB (librecomp default; game offers hi-res modes) / 4 MB (standard modes only) | **measure both in phase 04**, keep 8 MB unless hi-res or the extra memory breaks something; RT64 upscales regardless | measurement, then Daniel |
 | D8 | Identity | — | slug / repo / exe `hybrid-heaven-recomp`; env prefix `HH_`; CMake `HH_WITH_*`; settings `%LOCALAPPDATA%\hybrid-heaven-recomp` (Linux `$XDG_DATA_HOME/hybrid-heaven-recomp`) | series rule |
 | D9 | Player count | 1 / 1–2 | **1–2** with WR64/BAR `auto_assign_controllers` patch; keyboard always player 1 | series rule, after phase 01 confirms 2P in code |
-| D10 | Public GitHub repo | — | `gh repo create danielgomesvieira2000/hybrid-heaven-recomp --public` | *pending Daniel* (not created until asked) |
+| D10 | Public GitHub repo | — | `gh repo create danielgomesvieira2000/hybrid-heaven-recomp --public` | deferred: a public repo is outward-facing and Daniel did not explicitly ask for it; stays local until he does (phase 09 at the latest) |
 | D11 | Widescreen / HUD mechanism | MIPS patches against our own names / display-list rewriter (WR64 mechanism, fresh measurements) | decide at phase 07 entry, from what phases 04–06 learn about the draw code | phase 07 |
 
 ## Phases

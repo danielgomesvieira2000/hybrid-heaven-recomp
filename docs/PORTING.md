@@ -8,16 +8,24 @@ game are in [GAME-INTERNALS.md](GAME-INTERNALS.md). How each fact was found is i
 Each section states the **symptom first**, because a symptom is what you will have when
 you come looking.
 
-**Status:** phase 00. Only the survey exists; sections below are filled as phases land.
+**Status:** phase 00 done (skeleton builds, `--identify` works, patches apply). Sections below are filled as phases land.
 
-Pinned upstream revisions (planned, [PLAN.md](PLAN.md) D5; verified in phase 00):
+Pinned upstream revisions ([PLAN.md](PLAN.md) D5). RT64 and RecompFrontend, including every
+nested submodule, are identical to Wave Race 64: Recompiled 1.0.2's pins (compared with
+`git submodule status --recursive`).
 
 | Submodule | Commit |
 |---|---|
-| N64ModernRuntime (`danielgomesvieira2000/N64ModernRuntime`, branch `controller-pak`) | `b0b2b6e` (planned) |
-| N64Recomp (inside N64ModernRuntime) | as the runtime pins it |
-| RT64 | `5473732` (planned) |
-| RecompFrontend | `b1a1477` (planned) |
+| N64ModernRuntime (`danielgomesvieira2000/N64ModernRuntime`, branch `controller-pak`) | `b0b2b6e` = upstream `cdf5abb` (Wave Race's pin) + Controller Pak, Rayman 2 and Beetle runtime fixes |
+| N64Recomp (inside N64ModernRuntime) | `81213c1` (same as Wave Race) |
+| RT64 | `5473732` |
+| RecompFrontend | `b1a1477` |
+
+**Symptom: RT64 at `4337374` after `git submodule add` + `update --init --recursive`.**
+The recursive update checks out the commit recorded for a *freshly added* submodule, which is
+remote HEAD, not the commit checked out by hand before staging (playbook 01's pin trap, hit
+again here). Re-checkout `5473732`, update its nested submodules, `git add lib/RT64`, and
+verify with `git submodule status`.
 
 ## Contents
 
@@ -67,7 +75,23 @@ Every change to a submodule is an idempotent script in `tools/`, run by
 
 | Script | Submodule | What and why |
 |---|---|---|
-| | | |
+| `patch_rsprecomp.py` | N64Recomp (RSPRecomp) | indirect-jump dispatch masks the low two bits (the RSP ignores them); from Wave Race |
+| `patch_n64recomp.py` | N64Recomp | `use_lookup_for_all_function_calls` as a config key, for calls into shared-vram overlay windows; from Wave Race |
+| `patch_runtime_shutdown.py` + `patches/runtime-shutdown.patch` | N64ModernRuntime | join game and timer workers before RDRAM and queues are released (intermittent exit crash); from Wave Race/Pilotwings. **One hunk re-based onto the fork**: `ultramodern.hpp` has Beetle's `set_paused`/`is_paused` above `join_event_threads`, so the Wave Race context (`void quit();`) did not match |
+| `patch_recompinput.py` | RecompFrontend | `players::auto_assign_controllers` (pads assigned in connection order, keyboard stays player 1); from Wave Race |
+| `patch_rt64_eventfilter.py` | RT64 | `~ApplicationWindow` restores the previous SDL event filter (crash on every exit otherwise); from Wave Race |
+| `patch_rt64_inspector.py` | RT64 | `RT64_PortInspectorHook` in the F1 developer UI; F2 unbound; from Wave Race |
+| `patch_rt64_texturepacks.py` | RT64 | `RT64_SetTexturePacks` for texture-pack mods (anchors on the inspector patch); from Wave Race |
+| `patch_rt64_pairing.py` | RT64 | transform-pairing counters for interpolation measurement (`RT64_GetTransformPairing`); from Pilotwings |
+
+**Not used: Wave Race's `patch_librecomp.py`.** Its anchor (`get_function`'s
+`fprintf("Failed to find function…")` as the first statement of the miss branch) is gone on
+the fork, which already has the better mechanism (Rayman 2, fork commit `ddf510b`):
+`recomp::overlays::set_lookup_failure_handler` plus a per-thread ring of the last 32 resolved
+indirect targets (`get_lookup_history`). The port installs the handler in phase 03.
+
+Anchors verified against these revisions on 2026-09-15: first run patched everything, a
+second run reported every patch already applied.
 
 ## Testing and diagnostics
 
