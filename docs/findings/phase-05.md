@@ -88,21 +88,28 @@ changes now that one is detected.
 
 ## Saves
 
-**Wrong at first:** from the phase-04 trace (a blank pak, 130 s) I concluded the game creates no
-note in a new game. Run 2's inode table was different: allocated chains, not the all-free `0x0003`.
-The pak file (`%LOCALAPPDATA%\hybrid-heaven-recomp\controller_pak_1.pak`) now holds one note, created
-during one of the untraced phase-04 runs:
+**Wrong at first:** from the phase-04 trace on a blank pak I concluded the game creates no note in a
+new game. I had read only the first 60 lines of that trace. Run 2's inode table was different
+(allocated chains, not the all-free `0x0003`), and the whole phase-04 trace shows why: at t = 75 s, right after A
+dismisses the Controller Pak prompt, the game:
+1. reads the inode table (all free) and the note table;
+2. writes the inode table and backup with a new chain;
+3. writes note entry 0 (block `0x18`, starting `4E 48 56 45` = "NHVE");
+4. writes the first data page (blocks `0x28–0x2F`, page 5).
+
+So **a new game creates its save note** at the pak prompt. The note in
+`%LOCALAPPDATA%\hybrid-heaven-recomp\controller_pak_1.pak`:
 
 | Field | Value |
 |---|---|
 | game code / publisher | `NHVE` / `0x4134` ("A4", Konami) |
 | start page | 5 |
 | name | `21 32 1B 2B 22 1D 0F 21 1E 1A 2F 1E 27` = "HYBRID HEAVEN" in the N64 pak character set |
-| size | the inode chain runs 5 → 6 → … through the whole table (*inferred:* the note takes most of the pak) |
+| size | **53 pages** (page 5 through `0x39`, a contiguous chain), of the pak's 123 |
 
-Every later session, including a traced one, rewrites the inode table and its backup (`0x08–0x17`)
-and runs the block-0 write test at each pak check. Those checks happen at boot, GAME START and each
-prompt. Where the note is created is traced next, from a blank pak.
+Each pak check (at boot, GAME START and each prompt) runs the block-0 write test and rewrites the
+inode table and its backup (`0x08–0x17`) with unchanged contents. Still to show (gate): an in-game
+save writes into the note, and CONTINUE loads it after a restart.
 
 ## Audio pitch
 

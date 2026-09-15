@@ -224,8 +224,9 @@ on: `osMotorInit` (`func_80027D04`: bank `0xFE` must not read back, `0x80` must)
 `func_80031FF0` (`0xFE` must not read back, `0x84` must) and the Controller Pak checks. After each
 accepted `osMotorInit` it stops the motor (block `0x600`, `00`).
 
-The save is one note of game code `NHVE`, publisher `0x4134`, named "HYBRID HEAVEN", starting at
-page 5 with a chain through most of the pak (phase 05; when it is created is being traced).
+The save is one note: game code `NHVE`, publisher `0x4134`, named "HYBRID HEAVEN", **53 pages**
+starting at page 5. A new game creates it when A dismisses the Controller Pak prompt: new inode
+chain, note entry, first data page (phase 05).
 
 ## Leads from cheat databases (unverified)
 
