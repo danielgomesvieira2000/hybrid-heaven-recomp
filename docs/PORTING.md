@@ -8,7 +8,7 @@ game are in [GAME-INTERNALS.md](GAME-INTERNALS.md). How each fact was found is i
 Each section states the **symptom first**, because a symptom is what you will have when
 you come looking.
 
-**Status:** phase 02 done (15,851 functions recompiled, static library builds). Sections below are filled as phases land.
+**Status:** phase 04 done: boots through logos, title, menus, pak prompts and the opening cinematic into exploration, controllable with the stick; no lookup miss in 15 minutes. Phase 05 (correctness) in progress. Sections below are filled as phases land.
 
 Pinned upstream revisions ([PLAN.md](PLAN.md) D5). RT64 and RecompFrontend, including every
 nested submodule, are identical to Wave Race 64: Recompiled 1.0.2's pins (compared with
@@ -107,6 +107,40 @@ librecomp does not implement: `__d_to_ull` (called by the game), `__d_to_ll`, `_
 
 ## The harness
 
+From Pilotwings 64: Recompiled (itself Wave Race's): `src/main.cpp` (`run()`), `src/callbacks.cpp`
+(SDL input, audio queue + resampler, RSP dispatch, window), `src/renderer.cpp` (the port's own RT64
+context for frontend-less builds), `src/audiodiag.cpp`, `src/resample.cpp`, `src/testdrive.cpp`
+(input scripts). Hybrid Heaven's own:
+
+| File | What |
+|---|---|
+| `src/sections.cpp` | section tables; runtime-provided libultra at cartridge addresses (`RecompiledFuncs/runtime_funcs.inl`); **the `file_load` wrapper**, which announces each code file (by overlay id, evicting overlapping ones) before the game decompresses it; the failed-lookup report |
+| `src/libultra_stubs.cpp` | `__d_to_ll`, `__d_to_ull`, `__f_to_ull`, `__ll_to_d` |
+| `src/si_pak.cpp`, `src/controller_pak.cpp` | Controller Pak at the joybus + 32 KiB store in `controller_pak_1.pak` (Rayman 2) |
+| `src/spin_yield.cpp` | `hh_yield_in_spin`, called from TOML hooks in busy-waits (Rayman 2) |
+| `src/thread_sampler.cpp` | `HH_SAMPLE=1` (Rayman 2) |
+
+**Symptom: every game thread parked in `osRecvMesg` right after the first file loads.** A libultra
+routine that posts to a runtime-owned manager is still the game's copy. Here it was `osEPiStartDma`
+(the file loader's ROM reads); Rayman 2 had `osPiStartDma`. Name it so the runtime owns it.
+
+**Symptom: `ACCESS_VIOLATION` in `queue_samples` at `rdram + 0x20000002`.** `osAiSetNextBuffer`
+received a negative byte count: the audio manager's unsigned clamp (`[[patches.instruction]]` at
+`0x8001FD8C`). `HH_TRACE_AI=1` prints the first 12 buffers.
+
+**Symptom: 30 lists/s falls to 14, then screen updates stop about 30 s in, while audio continues.**
+The main loop's frame limiter busy-waits on `osGetTime`; `[[patches.hook]]` at `0x80001A88` yields.
+Found with `HH_FRAME_STATS` (the rate) and `HH_SAMPLE` (the main thread executing around `osGetTime`).
+`tools/find_spin_loops.py` does not report it: it only considers call-free loops.
+
+**Symptom: `microcode DMA from RDRAM 0x00F00000... runs past the 8 MB` on every audio task.** The
+private command-list copy must sit below 8 MB on the runtime fork (it bounds RSP DMAs). It is at
+`0x807F0000`.
+
+**Direct calls stay lookups.** With `use_lookup_for_all_function_calls`, even calls to runtime-owned
+libultra are `LOOKUP_FUNC(address)`, so a function registered at a cartridge address after the
+runtime table (`HH_TRACE_AI`'s wrapper) intercepts every game call to it.
+
 ## Patches
 
 ## Widescreen
@@ -158,9 +192,29 @@ Prefix `HH_`.
 
 | Variable | Effect |
 |---|---|
-| | |
+| `HH_INPUT_SCRIPT=<file>` | timed input (`tools/scripts/*.txt`; `2:` prefix = player 2) |
+| `HH_DEBUG_LOADS=1` | every code-file load: id, address, size, files evicted, and the last 6 addresses the thread resolved (the caller chain). A load away from the link address is always reported |
+| `HH_FRAME_STATS=1` | display lists per 60 screen updates |
+| `HH_AUDIO_STATS=1` | audio queue depth, silence inserted, peak amplitude, every 2 s |
+| `HH_AUDIO_DUMP=1` | WAV of exactly what is handed to SDL |
+| `HH_AUDIO_HEADROOM_MS`, `HH_AUDIO_PERIOD`, `HH_AUDIO_NO_RESAMPLE` | audio output knobs |
+| `HH_TRACE_AI=1` | the first 12 `osAiSetNextBuffer` calls |
+| `HH_PAKTRACE=1` | every Controller Pak status/read/write on the joybus |
+| `HH_SAMPLE=1` | thread sampler report every 2 s (perturbs timing; locate with it, do not measure behaviour) |
+| `HH_YIELD_MS=<0-100>` | spin-yield wait, default 1 |
+| `HH_SKIP_DL=1` | do not hand display lists to RT64 (bisect renderer faults) |
+| `HH_EXPANSION_PAK=0` | `osGetMemSize` (`0x8002C0B0`) reports 4 MB instead of the runtime's 8 MB (test switch; the game then skips its "Expansion Pak Enhanced" screen) |
+
+Set variables in the calling shell: `tools/boot_runs.ps1 -Env "A=1","B=1"` passes only the first.
 
 ### Traps
+
+- Symbolise a crash or sample offset: `llvm-symbolizer --obj=build\hybrid-heaven-recomp.exe --relative-address --demangle <offset>`.
+- `tools/boot_runs.ps1` (gate runs) and `tools/shoot_run.ps1` (window grabs every N seconds) kill the
+  process at the end; the window must be visible for grabs. They photograph the desktop: a covering
+  terminal is silently what gets saved (phase 04, run 6). When a picture matters, use
+  `python tools/capture_frames.py OUTDIR FROM TO --exe build\hybrid-heaven-recomp.exe --title "Hybrid Heaven: Recompiled" --rom rom.z64 --env HH_INPUT_SCRIPT=<file>`,
+  which reads the window through Windows Graphics Capture.
 
 ---
 

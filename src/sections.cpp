@@ -138,6 +138,12 @@ void file_load_hook(uint8_t* rdram, recomp_context* ctx) {
     file_load(rdram, ctx);
 }
 
+constexpr uint32_t kOsGetMemSizeAddress = 0x8002C0B0;
+void os_get_mem_size_4mb(uint8_t* rdram, recomp_context* ctx) {
+    (void)rdram;
+    ctx->r2 = 4 * 1024 * 1024;
+}
+
 // HH_TRACE_AI=1: the buffer address and size the game hands osAiSetNextBuffer,
 // for the first 12 calls.
 extern "C" void osAiSetNextBuffer_recomp(uint8_t* rdram, recomp_context* ctx);
@@ -227,6 +233,17 @@ void register_runtime_functions() {
 
     // Last, so nothing above overwrites it.
     recomp::overlays::add_loaded_function(static_cast<int32_t>(kFileLoadAddress), file_load_hook);
+    // HH_EXPANSION_PAK=0: report a 4 MB console. The game asks only through
+    // osGetMemSize (0x8002C0B0; main compares the answer with 0x400000), which the
+    // runtime answers with 8 MB. For the phase-04 comparison of the two modes
+    // (docs/PLAN.md D7).
+    {
+        const char* v = std::getenv("HH_EXPANSION_PAK");
+        if (v != nullptr && *v == '0') {
+            recomp::overlays::add_loaded_function(static_cast<int32_t>(kOsGetMemSizeAddress), os_get_mem_size_4mb);
+            std::fprintf(stderr, "[hh] HH_EXPANSION_PAK=0: osGetMemSize reports 4 MB\n");
+        }
+    }
     if (env_set("HH_TRACE_AI")) {
         recomp::overlays::add_loaded_function(static_cast<int32_t>(kAiSetNextBufferAddress), ai_set_next_buffer_trace);
     }

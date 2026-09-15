@@ -2,13 +2,16 @@
 
 The working record, wrong turns included; not rewritten later.
 
-**Gate:** in progress.
-- **Reached so far:** the KCEO logo, the Expansion Pak screen, the night-city intro cinematic,
-  the **title screen ("PRESS START BUTTON")** and the attract loop's TV-static scene. All render
-  recognisably, at a steady 30 display lists per second, with music (peak amplitude 20–31k),
-  in a 90 s unattended run.
-- **Still to show:** New Game → opening cutscene → first controllable scene, driven by scripted
-  input; no lookup miss in 10 minutes of scripted play; the D7 Expansion Pak comparison.
+**Gate:** met (2026-09-15).
+- **On screen, recognisably:** the KCEO logo, the Expansion Pak screen, the night-city intro
+  cinematic, the title screen ("PRESS START BUTTON"), the attract loop's TV-static scene, the menus
+  and pak prompts, the whole opening cinematic, and **exploration with the radar HUD** (run 5),
+  where the **stick moves the hero** (run 7).
+- **Every code-file load** logged (`HH_DEBUG_LOADS`) lands at its link address, except file 24's
+  known heap copy. Data-file ids are not logged individually, so "no unknown id" is shown only for
+  code. **No lookup miss** or crash occurs in 900 s of scripted play (run 5), 624 s at 4 MB (run 6) or
+  556 s (run 7).
+- **D7** measured both memory sizes (run 6): 8 MB kept.
 
 Reproduce:
 
@@ -79,6 +82,83 @@ to `0x807F0000`, because the runtime fork bounds RSP DMAs to 8 MB.
 | 52 | 29 | **HYBRID HEAVEN title, PRESS START BUTTON** |
 | 88 | — | TV static with "VOL. IIIII" (attract loop) |
 
+### Run 5 (same build, `tools/scripts/newgame.txt`): 15 minutes into play
+
+`HH_INPUT_SCRIPT=tools/scripts/newgame.txt HH_DEBUG_LOADS=1`, `tools/shoot_run.ps1 -Count 9
+-Interval 60 -Delay 420`. The script presses START three times, A at the two pak prompts, then A
+every 3 s to the end. No stick input.
+
+| t (s) | Log | On screen |
+|---|---|---|
+| 55–65 | menu inputs; files 25, 26, 55, 100 load | main menu → GAME START |
+| 70–90 | Controller Pak and Rumble Pak prompts | — |
+| 420 | — | still the opening cinematic: the hero in a blue capsule room |
+| **462** | **files 9 (`0x801BF1A0`), 10, 11, 13 (`0x802408F0`), 55, 56 load**; file 9 evicts 25 and 26 | — |
+| 480 | — | **exploration HUD (radar, top left)**; the hero walks through a door |
+| 540–900 | no further loads | a new room every minute: crates, a lift pad, a catwalk, climbing a crate, a searchlight corridor with a green figure marker |
+| 900 | process killed by the script | — |
+
+No lookup miss, no crash and no load away from a link address other than file 24's known heap
+copy, over 900 s. The hero changes rooms with no stick input. *Inferred:* the first rooms are a
+guided sequence that A advances. Whether the stick moves him is checked in a separate run
+(below).
+
+### Run 6 (D7): 4 MB reported
+
+The same script and build, with `HH_EXPANSION_PAK=0`, which registers a replacement for
+`osGetMemSize` (`0x8002C0B0`) that returns `0x400000`. `tools/shoot_run.ps1 -Count 12 -Interval 50
+-Delay 12`, killed at 624 s.
+
+| | 8 MB (run 5) | 4 MB (run 6) |
+|---|---|---|
+| "Expansion Pak Enhanced" screen | 9–33 s | **not shown**: at 12 s the night-city intro is already playing |
+| file loads | 8, 55, 24 (twice), 25, 26, 100, then 9, 10, 11, 13, 55, 56 | **the same list**, file 24's heap copy included |
+| exploration HUD | by 480 s | by 462 s (about 20 s earlier, the length of the skipped screen) |
+| at the end | 900 s, a new room each minute | 562 s: a dialogue box, "Code renewal is done at the code rewriting machine" |
+| lookup misses, crashes | 0 | 0 |
+
+The window grab at 62 s (main menu) caught the terminal covering the game, so whether the
+RESOLUTION entry depends on the memory size was not seen. `tools/capture_window.ps1` photographs the
+desktop; use `tools/capture_frames.py` for anything that must not be covered.
+
+**D7 outcome:** keep 8 MB, the runtime default. Both sizes run the same code files and neither
+failed; 8 MB is what the game advertises as enhanced. **Open for phase 07:** what the hi-res mode
+(RESOLUTION) changes, and whether it needs 8 MB.
+
+### Run 7: the stick moves the hero
+
+`tools/scripts/stick-check.txt` repeats run 5's inputs to 489 s, then idles, then holds the stick
+left, right, up and down for 8 s each (no buttons). Frames recorded 495–556 s with
+`python tools/capture_frames.py ... 495 556 --scale 0.25` (1,679 frames, 27.5 a second).
+
+| t (s) | Input | Frames |
+|---|---|---|
+| 498–511 | none | the hero stands still on a catwalk, camera behind him |
+| 513–521 | stick left | he turns and runs left, to the wall, and the camera follows |
+| 522–551 | right, up, down | he turns and moves each time; camera cuts to a railing view |
+
+This run's build already carried the first phase-05 Rumble Pak change (`docs/findings/phase-05.md`).
+The input path is the phase-03 harness's and is unchanged by it.
+
+*Negative result:* the first attempt ran `capture_frames.py` from a background PowerShell task. The
+game logged `SDL_QUIT received` at 494 s and the capture saved 0 frames. A 5-second capture run from
+Bash worked, and so did the 9-minute rerun from Bash. *Inferred:* the PowerShell task's teardown
+closed the child's console.
+
+### Controller Pak traffic (`HH_PAKTRACE=1`)
+
+After GAME START the game detects the pak, then:
+1. writes and reads back block `0x400`;
+2. runs a write test on block 0;
+3. reads the ID, label, inode (`0x08–0x0F`) and note (`0x18–0x27`) blocks;
+4. writes the inode backup (`0x10–0x17`) several times with the same contents.
+
+Every block's data CRC is checked by the game's `__osContDataCrc` (`func_80034360`): a CRC-8 with
+polynomial `0x85` over the 32 data bytes and then 8 zero bits. Read instruction by instruction, it
+is the same computation as `data_crc` in `src/si_pak.cpp`, which is Rayman 2's. The transport
+needs no change for this game. **Open for phase 05:** why the inode backup is rewritten
+repeatedly (possibly a repair pass on a blank pak).
+
 ### File loads, as the game does them
 
 | Caller | What it does | Files seen |
@@ -88,7 +168,7 @@ to `0x807F0000`, because the runtime fork bounds RSP DMAs to 8 MB.
 | `0x800045E8` | `dest = func_8001F290(vram span)` (heap allocation), `file_load(id, dest)`, then `func_80016EAC(id, dest)` records (id → address) in a table (`func_80017384`/`func_800173B8`) | **24 at `0x801FA948`**, not its link address |
 
 The heap load of file 24 is reported ("loaded at 0x801FA948, but its code is linked at 0x801BF1A0");
-the wrapper registers the file at its link address anyway. No lookup miss followed in 90 s, so it is
+the wrapper registers the file at its link address anyway. No lookup miss followed in 900 s (run 5), so it is
 *inferred* that this copy is used as data (a cache), not executed. **Open:** if code ever runs from a
 heap copy, the recompiled code (absolute addresses) is wrong there, and the loud warning is where to
 start.

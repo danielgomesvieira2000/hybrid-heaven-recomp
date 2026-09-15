@@ -121,17 +121,68 @@ evidence: `recomp/symbol_addrs.txt`. Addresses of note:
 ## The main loop and game states
 
 `main` (`0x80001078`):
-1. Calls `func_80028B10` (*inferred* `osInitialize`).
+1. Calls `osInitialize` (`0x80028B10`).
 2. **Spins forever if `osTvType` (`0x80000300`) is 0** (PAL): an NTSC region lock.
-3. `func_8002C0B0` (*inferred* `osGetMemSize`) == `0x400000` → flags `0x80037754`/`0x80037758` = 0, else 1.
-4. Creates threads (`func_80028260`, *inferred* `osCreateThread`).
+3. `osGetMemSize` (`0x8002C0B0`) == `0x400000` → flags `0x80037754`/`0x80037758` = 0, else 1.
+4. Creates threads (`osCreateThread`, `0x80028260`).
 
 Boot memory setup at `0x80001314` loads ids 2, 4, 5, 7 and 8, creates the heap, and
 calls `0x80133AAC` in file 8.
 
+### What an unattended boot shows (phase 04, 8 MB reported)
+
+| t (s) | Screen | Code files loaded |
+|---|---|---|
+| 0–8 | KCEO "presents" logo | 8, 55 |
+| 9–33 | Expansion Pak screen, "Expansion Pak Enhanced" (a figure on a 3D Expansion Pak) | 24 at `0x801BF1A0`, 55, then 24 again at a heap address |
+| 34–50 | night-city intro cinematic, music | — |
+| ~52 | title, "PRESS START BUTTON" | — |
+| ~88 | attract loop: TV static with "VOL. IIIII" | the sequence then repeats from the logo |
+
+### Menus and the new-game path (`tools/scripts/newgame.txt`)
+
+| Input | Screen |
+|---|---|
+| START at the title | NEW GAME / CONTINUE / BATTLE MODE / SOUND / RESOLUTION |
+| START on NEW GAME | GAME START / DIFFICULTY / EXIT |
+| START on GAME START | "Please connect Controller Pak to Controller 1 now. Do not remove Controller Pak." ▼ (the game then detects the pak and reads its ID, inode and note pages) |
+| A | "Please connect a Rumble Pak now if you wish to use it. Please push A Button to continue." |
+| A | the opening cinematic: Slater waking in a room, a press conference with a mosaic transition, a subway platform, an elevator shaft, a struggle scene. Code files 25 (`0x801BF1A0`), 26 (`0x801E1BE0`), 55 and 100 (`0x8038B7E0`) load |
+| A every 3 s, ~6 min | the cinematic ends in a blue capsule room; then **exploration**: the radar HUD top left, the hero in metal corridors. Files 9 (`0x801BF1A0`, evicting 25 and 26), 10 (`0x801E4AA0`), 11 (`0x8021B150`), 13 (`0x802408F0`), 55 and 56 (`0x803757E0`) load at the switch (t≈462 s) and nothing more loads in the next 7 minutes of rooms. *Inferred:* files 9–11 are the exploration engine |
+
+### Memory size
+
+With `osGetMemSize` answering 4 MB (`HH_EXPANSION_PAK=0`) the "Expansion Pak Enhanced" screen is
+skipped and the night-city intro starts straight after the logo. The code files loaded to
+exploration are the same as with 8 MB (phase 04, run 6). The main menu's RESOLUTION entry was not
+yet checked at 4 MB.
+
+### File loads through allocators
+
+`file_load(id, dest)` writes where it is told. Its callers pass allocator pointers, not
+table addresses:
+
+| Caller | `dest` |
+|---|---|
+| `0x80004484` | `align8(*0x801BBC10)`, an arena pointer |
+| `0x800044BC` | `align8(*0x80089470)`, a bump allocator that starts at `0x801BF1A0` and is advanced to the returned end |
+| `0x800045E8` | `func_8001F290(vram span)`, a heap allocation; afterwards `func_80016EAC(id, dest)` records (id → address) in a table |
+
+For code files the allocators hand out the link address in every case seen so far, except file 24's
+second copy through `0x800045E8`, which lands at `0x801FA948` (*inferred:* a data cache; nothing
+executes there in a 15-minute run that reaches exploration).
+
 ## Timing
 
-Not yet measured.
+The main loop (`func_80001454`) ends each frame in a **frame limiter that polls the clock**
+(`0x80001A88–0x80001B18`): `target = func_80133AA0()`, then
+`do { elapsed = (osGetTime() − *0x80037760) × 64 / 3000 / *0x8004B908 } while (elapsed < target)`.
+It calls nothing that yields. With the port's yield hook the game settles at 29–30 display lists
+per 60 VIs in menus, cinematics and the intro (`HH_FRAME_STATS`), i.e. *inferred* a 30 fps
+target. Other `osGetTime` uses in the loop (`0x80001854`, `0x80001938`) are one-shot measurements
+feeding a game clock (`0x801BBBF0`: a frame counter wrapping at 3600 (`0xE10`), and a minute field).
+A 16-iteration and a 262,144-iteration counted delay loop also exist (`0x8001F8E8` in audio init,
+`0x80020204` before `alHeapInit`); both are finite and harmless.
 
 ## Rendering
 
@@ -140,15 +191,35 @@ Normal" / "High Letterbox" modes (~640×480) (reviews; not measured).
 
 ## Audio
 
-Stock `aspMain` (above). Sequence/sound library not identified.
+Stock `aspMain` (above). The audio manager follows Nintendo's audio-manager sample:
+- init `func_8001F8A0` (`osAiSetFrequency`, `alInit`, heap `0x80096AB0` + `0x35000` from
+  `alHeapInit` in `func_800201D0`, 3 `AudioInfo` of `0x68` bytes at `0x80091BD8`);
+- thread `func_8001FBA8`;
+- frame handler `func_8001FD14`.
+
+The frame handler sizes each frame as `(target + 0x100 − osAiGetLength()/4) & 0xFFF0`, raised to a
+minimum by an **unsigned** compare at `0x8001FD8C`. A queue deeper than a frame makes that
+negative and lets it past; the port patches it to a signed compare. Output rate 44100 Hz (host
+queue stats); the task's command list lives in the game's buffer around `0x800BF9F0`.
 
 ## Input
 
-Not yet measured. The debug string `ReadControllers` is at ROM `0x4C418`.
+`osContStartReadData`/`osContGetReadData` fill a 4-pad `OSContPad` array at `0x8005CE50`, read by
+`func_800021B4` into per-pad records at `0x80089474` (buttons, pressed edges, stick; 0x20 bytes
+each). Prompts advance on A; the title and menus take START. In exploration the stick turns and moves the hero (phase 04, `tools/scripts/stick-check.txt`). The debug string `ReadControllers`
+is at ROM `0x4C418`.
 
 ## Saves
 
-Controller Pak (databases). Not yet measured in code.
+Controller Pak, confirmed on the joybus (`HH_PAKTRACE`). After GAME START the game:
+1. sends a status query (card present);
+2. writes and reads back block `0x400` (identify / bank select);
+3. writes `00 01 02 03…` to block 0 and reads it back, a write test;
+4. reads the ID block (block 1), the label (block 7), the inode table (blocks `0x08–0x0F`) and the
+   note table (blocks `0x18–0x27`);
+5. writes the inode backup (blocks `0x10–0x17`) with the same contents several times.
+
+The Rumble Pak is offered at a separate prompt.
 
 ## Leads from cheat databases (unverified)
 

@@ -1,0 +1,4 @@
+# Wait for the title screen (about 52 s into an unattended boot), then press Start.
+# <start s> <end s> <buttons> [stick_x stick_y] [# note]
+55.0 55.3 START   # title: press start
+60.0 60.3 START   # whatever follows: start again
