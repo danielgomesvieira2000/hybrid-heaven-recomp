@@ -6,7 +6,7 @@ here, add a note under *Departures* rather than rewriting the text. Findings go 
 [findings/](findings). Reference facts go in [PORTING.md](PORTING.md) (port) and
 [GAME-INTERNALS.md](GAME-INTERNALS.md) (game).
 
-**Status:** plan approved by Daniel 2026-09-15 ("looks good, continue autonomously"). The
+**Status:** phases 00-02 done 2026-09-15. Plan approved by Daniel 2026-09-15 ("looks good, continue autonomously"). The
 session runs autonomously: at each choice the recommended option is taken and logged below.
 
 > **Departures from this plan** (added as they happen):

@@ -8,7 +8,7 @@ game are in [GAME-INTERNALS.md](GAME-INTERNALS.md). How each fact was found is i
 Each section states the **symptom first**, because a symptom is what you will have when
 you come looking.
 
-**Status:** phase 01 done (byte-identical ELF, 15,947 functions, 147 library names). Sections below are filled as phases land.
+**Status:** phase 02 done (15,851 functions recompiled, static library builds). Sections below are filled as phases land.
 
 Pinned upstream revisions ([PLAN.md](PLAN.md) D5). RT64 and RecompFrontend, including every
 nested submodule, are identical to Wave Race 64: Recompiled 1.0.2's pins (compared with
@@ -85,6 +85,25 @@ ports' ELFs, names only), `callgraph.py` (callers, callees, registers), `jal_aud
 classified; must report 0 mid-function and 0 nowhere).
 
 ## Recompiling
+
+`wsl -d Ubuntu -e bash tools/regenerate.sh` runs the whole chain; `tools/recompile.sh` is the N64Recomp /
+RSPRecomp half (`recomp/hybrid-heaven.us.toml`, `recomp/aspMain.us.toml`, `recomp/overlays.txt`).
+
+- **`use_lookup_for_all_function_calls = true`.** 15,251 calls land in another file's window; only the
+  loaded file can say which function is meant.
+- **Every code file is a relocatable section** (`overlays.txt`, generated). There are no `.rel` sections:
+  files always load at their link address, so absolute addresses in the code are right as they stand.
+  Jump tables are read relative to the calling function's own section, so shared addresses do not
+  confuse them.
+- **Counts must reconcile** (`tools/count_recompiled.py`): emitted = FUNC − names the runtime owns.
+
+**Symptom: `Unhandled cop0 register in mfc0` / `Unhandled instruction: trunc.l.d` / `branching outside
+of the function`.** Each was a libultra routine not yet described. Stub a routine only when nothing the
+game still runs can reach it; otherwise give it its libultra name so the runtime owns it. The three cases
+and their evidence are in `recomp/symbol_addrs.txt` and findings/phase-02.md.
+
+**Port-supplied libultra:** names in N64Recomp's ignored set that recompiled code still calls and
+librecomp does not implement: `__d_to_ull` (called by the game), `__d_to_ll`, `__f_to_ull`, `__ll_to_d`.
 
 ## The harness
 

@@ -73,11 +73,32 @@ osContGetReadData = 0x80028434; // type:func
 // handle into the PI table under __osDisableInt. osCartRomInit (reimplemented).
 osCartRomInit = 0x80032BE0; // type:func
 
-// The exception vector code, one handwritten routine splat cut as a single
-// 0x534-byte function: a 0x10-byte preamble (`lui/addiu $k0; jr $k0`) jumping to
-// __osException at 0x800270C0. Both names are in N64Recomp's ignored set.
+// libultra's 64-bit float conversions (ll_cvt), in libultra's order, each identified
+// by its FPU opcode: trunc.l.d, trunc.l.s, cvt.l.d with the 2^63 fix-up, cvt.l.s
+// with the fix-up, cvt.d.l, cvt.s.l, cvt.d.l with the unsigned fix-up, cvt.s.l
+// with the fix-up. N64Recomp cannot translate trunc.l/cvt.l (the first stopped the
+// recompile) and lists all eight as ignored; librecomp's math_routines.cpp has
+// __f_to_ll, __ll_to_f, __ull_to_d and __ull_to_f, the port supplies the rest.
+__d_to_ll = 0x80034A80; // type:func size:0x1C
+__f_to_ll = 0x80034A9C; // type:func size:0x1C
+__d_to_ull = 0x80034AB8; // type:func size:0xA0
+__f_to_ull = 0x80034B58; // type:func size:0x9C
+__ll_to_d = 0x80034BF4; // type:func size:0x18
+__ll_to_f = 0x80034C0C; // type:func size:0x18
+__ull_to_d = 0x80034C24; // type:func size:0x34
+__ull_to_f = 0x80034C58; // type:func size:0x38
+
+// The exception vector code, handwritten: a 0x10-byte preamble (`lui/addiu $k0;
+// jr $k0`) jumping to __osException at 0x800270C0, which runs to
+// __osEnqueueAndYield at 0x800276CC. The tail at 0x800275E4 is jal'd ten times
+// from __osException's interrupt dispatch and ends in a branch back into it
+// (0x800276C4 -> 0x8002759C), which N64Recomp rejects ("branching outside of the
+// function") -- libultra's send_mesg, with handle_CpU after it. Widening
+// __osException over it does not work: the jal keeps a label there. Named, it is
+// ignored like the rest; the runtime owns exceptions.
 __osExceptionPreamble = 0x800270B0; // type:func size:0x10
 __osException = 0x800270C0; // type:func size:0x524
+send_mesg = 0x800275E4; // type:func size:0xE8
 // Writes cop0 EPC (14) and Status (12) and restores the FPU CSR from a thread,
 // reached from osStartThread/osDestroyThread; donor body 0.99 (Beetle). The label
 // 0x800279A0 inside splat's function is __osCleanupThread, the return address

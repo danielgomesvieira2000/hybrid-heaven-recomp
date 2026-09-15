@@ -1,0 +1,28 @@
+# RSPRecomp config for Hybrid Heaven's audio microcode.
+#
+# The aspMain text at ROM 0x37130 is byte-for-byte the one Wave Race 64 (USA
+# Rev A) and Pilotwings 64 (USA) ship (SHA-1 21e05bb9..., checked by
+# tools/nisitenma.py), and its 16-entry command table at ROM 0x4E520 holds the
+# same values. So the facts both ports established apply unchanged:
+#
+# - text_address is 0x04001080, not 0x04001000: rspboot occupies the first 0x80
+#   bytes of IMEM (playbook 06). At 0x1000 every jump lands 0x80 bytes early and
+#   the port freezes silently on the first audio task.
+# - The command handlers are reached through the table in the data segment
+#   (`lh $2, 0x10($2)`, `jr $2`), invisible to RSPRecomp, so they are listed.
+
+rom_file_path = "../rom.z64"
+text_offset = 0x37130
+text_size = 0xE20
+text_address = 0x04001080
+
+# C++: includes librecomp's RSP headers; also kept out of the *.c glob.
+output_file_path = "../RecompiledFuncs/aspMain_rsp.cpp"
+output_function_name = "aspMain_run"
+
+extra_indirect_branch_targets = [
+    0x1118, 0x1470, 0x11DC, 0x1B38,
+    0x1214, 0x187C, 0x1254, 0x12D0,
+    0x12EC, 0x1328, 0x140C, 0x1294,
+    0x1E24, 0x138C, 0x170C, 0x144C,
+]
