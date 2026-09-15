@@ -1,6 +1,7 @@
 // The HUD rewriter. See include/hh/hudrewrite.h.
 
 #include "hh/hudrewrite.h"
+#include "hh/hudid.h"
 #include "hh/inspector.h"
 
 #include <cstdio>
@@ -34,12 +35,6 @@ uint32_t read_word(const uint8_t* rdram, uint32_t phys) {
     return v;
 }
 
-std::string hex_id(const char* kind, uint32_t value) {
-    char buf[32];
-    std::snprintf(buf, sizeof buf, "%s:0x%08x", kind, value);
-    return buf;
-}
-
 int class_of(const std::string& identity) {
     return hh::inspector::class_for(identity.c_str());
 }
@@ -69,6 +64,7 @@ struct Writer {
     uint32_t viewport_w0 = 0, viewport_w1 = 0, scissor_w0 = 0, scissor_w1 = 0;
     uint32_t projection_w0 = 0, projection_w1 = 0;
     uint32_t image = 0, fill_colour = 0;
+    std::string texture_ident;
     int applied = 0;
 
     uint32_t physical(uint32_t address) const {
@@ -244,8 +240,9 @@ struct Writer {
                         // list's end. A classified branch target (the radar dial is
                         // one, dl:0x80181860) is therefore wrapped from here to that
                         // end command.
-                        const int cls = class_of(hex_id("dl", w1));
-                        trace_seen(hex_id("dl", w1), "branch", cls);
+                        const std::string id = hh::hudid::list(rdram, w1, physical(w1));
+                        const int cls = class_of(id);
+                        trace_seen(id, "branch", cls);
                         if (branch_cls != hh::inspector::kAuto) group_end(branch_cls);
                         branch_cls = cls;
                         if (cls != hh::inspector::kAuto) {
@@ -255,8 +252,9 @@ struct Writer {
                         pc = physical(w1);   // follow it inline
                         break;
                     }
-                    const int cls = depth < 10 ? class_of(hex_id("dl", w1)) : hh::inspector::kAuto;
-                    trace_seen(hex_id("dl", w1), "call", cls);
+                    const std::string id = hh::hudid::list(rdram, w1, physical(w1));
+                    const int cls = depth < 10 ? class_of(id) : hh::inspector::kAuto;
+                    trace_seen(id, "call", cls);
                     // The callee is copied first, after this list's commands so far,
                     // so write the call's placeholder, then the callee, and patch.
                     uint32_t callee = w1;
@@ -315,6 +313,7 @@ struct Writer {
                     break;
                 case kSetTImg:
                     image = w1;
+                    texture_ident = hh::hudid::texture(rdram, w1, physical(w1));
                     emit(w0, w1);
                     break;
                 case kSetFillColor:
@@ -322,8 +321,13 @@ struct Writer {
                     emit(w0, w1);
                     break;
                 case kFillRect: {
-                    const int cls = class_of(hex_id("fill", fill_colour));
-                    trace_seen(hex_id("fill", fill_colour), "fill rect", cls);
+                    // Same coordinates as the panel's feed: 320x240, clears excluded.
+                    const float to_320 = 320.0f / static_cast<float>(fb_width);
+                    const std::string id = hh::hudid::fill(
+                        fill_colour, int((((w1 >> 12) & 0xFFF) / 4.0f) * to_320), int(((w1 & 0xFFF) / 4.0f) * to_320),
+                        int((((w0 >> 12) & 0xFFF) / 4.0f) * to_320), int(((w0 & 0xFFF) / 4.0f) * to_320));
+                    const int cls = id.empty() ? hh::inspector::kAuto : class_of(id);
+                    if (!id.empty()) trace_seen(id, "fill rect", cls);
                     rect_begin(cls);
                     emit(w0, w1);
                     rect_end(cls);
@@ -332,8 +336,8 @@ struct Writer {
                 }
                 case kTexRect:
                 case kTexRectFlip: {
-                    const int cls = class_of(hex_id("tex", image));
-                    trace_seen(hex_id("tex", image), "tex rect", cls);
+                    const int cls = class_of(texture_ident);
+                    trace_seen(texture_ident, "tex rect", cls);
                     rect_begin(cls);
                     emit(w0, w1);
                     for (uint8_t half : { kRdpHalf1, kRdpHalf2 }) {

@@ -5,6 +5,7 @@
 // command's two words and a matrix's words are read with a plain memcpy.
 
 #include "hh/dlcensus.h"
+#include "hh/hudid.h"
 #include "hh/inspector.h"
 
 #include <algorithm>
@@ -110,6 +111,9 @@ struct Census {
     struct Screen { float x, y; bool ok; };
     Screen verts[64] = {};
     uint32_t list_id = 0;           // the called list being walked (its address as the caller gave it); 0 = top level
+    std::string list_ident;         // its identity (include/hh/hudid.h), taken when it was entered
+    std::string texture_ident;      // the current texture's identity, taken at G_SETTIMG (hud only)
+    const std::string& image_ident() const { return texture_ident; }
 
     static void read_matrix(const uint8_t* rdram, uint32_t phys, M4& out) {
         for (int e = 0; e < 16; ++e) out[e / 4][e % 4] = mtx_element(rdram, phys, e);
@@ -161,8 +165,8 @@ struct Census {
             x0 = std::min(x0, v[i]->x); x1 = std::max(x1, v[i]->x);
             y0 = std::min(y0, v[i]->y); y1 = std::max(y1, v[i]->y);
         }
-        note(list_id != 0 ? hex_id("dl", list_id) : hex_id("tex", image),
-             list_id != 0 ? hex_id("tex", image) : std::string(), x0, x1, y0, y1, false);
+        note(list_id != 0 ? list_ident : image_ident(),
+             list_id != 0 ? image_ident() : std::string(), x0, x1, y0, y1, false);
     }
 
     uint32_t physical(uint32_t address) const {
@@ -207,12 +211,16 @@ struct Census {
                     if (branch) {
                         pc = physical(w1);
                         list_id = w1;
+                        if (hud) list_ident = hh::hudid::list(rdram, w1, pc);
                     }
                     else {
                         const uint32_t caller = list_id;
+                        const std::string caller_ident = list_ident;
                         list_id = w1;
+                        if (hud) list_ident = hh::hudid::list(rdram, w1, physical(w1));
                         walk(w1, depth + 1);
                         list_id = caller;
+                        list_ident = caller_ident;
                     }
                     break;
                 }
@@ -350,6 +358,7 @@ struct Census {
                     break;
                 case kSetTImg:
                     image = w1;
+                    if (hud) texture_ident = hh::hudid::texture(rdram, w1, physical(w1));
                     break;
                 case kSetCImg:
                     colour_images.push_back(w1);
@@ -360,10 +369,11 @@ struct Census {
                     const float ulx = ((w1 >> 12) & 0xFFF) / 4.0f, uly = (w1 & 0xFFF) / 4.0f;
                     const float lrx = ((w0 >> 12) & 0xFFF) / 4.0f, lry = (w0 & 0xFFF) / 4.0f;
                     if (hud) {
-                        // Full-frame fills are the clears, not the HUD.
-                        const bool clear = ulx == 0.0f && uly == 0.0f && lrx * to_320 >= 319.0f && lry * to_320 >= 239.0f;
-                        if (!clear) {
-                            note(hex_id("fill", fill_colour), std::string(),
+                        // Full-frame fills are the clears, not the HUD: no identity.
+                        const std::string id = hh::hudid::fill(fill_colour, int(ulx * to_320), int(uly * to_320),
+                                                               int(lrx * to_320), int(lry * to_320));
+                        if (!id.empty()) {
+                            note(id, std::string(),
                                  ulx * to_320, (lrx + 1.0f) * to_320, uly * to_320, (lry + 1.0f) * to_320, true);
                         }
                         break;
@@ -374,7 +384,7 @@ struct Census {
                 case kTexRect:
                 case kTexRectFlip:
                     if (hud) {
-                        note(hex_id("tex", image), std::string(),
+                        note(image_ident(), std::string(),
                              ((w1 >> 12) & 0xFFF) / 4.0f * to_320, ((w0 >> 12) & 0xFFF) / 4.0f * to_320,
                              (w1 & 0xFFF) / 4.0f * to_320, (w0 & 0xFFF) / 4.0f * to_320, true);
                     }
@@ -434,6 +444,17 @@ void per_frame(uint8_t* rdram, uint32_t list_address) {
             // "As classified" in the panel is the built-in class; the panel
             // shows an override on top of it itself.
             const int given = hh::inspector::builtin_class(e.identity.c_str());
+            // HH_HUD_ELEMENTS_LOG=1: every new identity once, with its extent, so tags
+            // can be matched to elements from a log.
+            static const bool log_elements = std::getenv("HH_HUD_ELEMENTS_LOG") != nullptr;
+            if (log_elements) {
+                static std::vector<std::string> seen;
+                if (seen.size() < 2000 && std::find(seen.begin(), seen.end(), e.identity) == seen.end()) {
+                    seen.push_back(e.identity);
+                    std::fprintf(stderr, "[hh-el] %s %s x %.0f..%.0f y %.0f..%.0f %s\n", e.identity.c_str(),
+                                 e.second.c_str(), e.x0, e.x1, e.y0, e.y1, e.rect ? "rect" : "tris");
+                }
+            }
             hh::inspector::note_element(e.identity.c_str(), e.second.c_str(), e.x0, e.x1, e.y0, e.y1,
                                         false, given, e.rect);
         }
