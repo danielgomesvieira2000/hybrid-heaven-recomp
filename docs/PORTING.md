@@ -8,7 +8,7 @@ game are in [GAME-INTERNALS.md](GAME-INTERNALS.md). How each fact was found is i
 Each section states the **symptom first**, because a symptom is what you will have when
 you come looking.
 
-**Status:** phase 00 done (skeleton builds, `--identify` works, patches apply). Sections below are filled as phases land.
+**Status:** phase 01 done (byte-identical ELF, 15,947 functions, 147 library names). Sections below are filled as phases land.
 
 Pinned upstream revisions ([PLAN.md](PLAN.md) D5). RT64 and RecompFrontend, including every
 nested submodule, are identical to Wave Race 64: Recompiled 1.0.2's pins (compared with
@@ -58,6 +58,32 @@ is derived from the dump and git-ignored.
 
 ## The ELF
 
+Pipeline: `tools/unpack_rom.py` → `tools/gen_splat_yaml.py` → `tools/wsl_split.sh` (splat 0.32.2,
+spimdisasm 1.42.4 in `~/hhvenv`, `tools/wsl_setup_splat.sh`) → `tools/wsl_build_elf.sh` →
+`tools/verify_elf.py`. Output `elf/hybrid-heaven.us.elf` (git-ignored).
+
+**Symptom: splat says `sha1 mismatch`.** The `sha1:` in the config is the *expanded image's*
+(`99ba14e6…`), not the cartridge's. A mismatch means `unpack_rom.py` or the dump changed.
+
+**Symptom: tens of thousands of FUNC symbols, so N64Recomp would translate data.** splat's default label
+macro for data and jump tables is `glabel`, which `recomp/macro.inc` types `@function`. The config sets
+`asm_data_macro: dlabel` / `asm_jtbl_label_macro: jlabel` (object-typed). Labels spimdisasm writes inside
+text files still use `glabel`; `wsl_build_elf.sh` rewrites `glabel D_` to `dlabel D_` before assembling.
+
+**Symptom: data bytes shifted by a few bytes after each text section.** The generated linker script aligns
+each section end to 16. Text boundaries are therefore rounded up to 16, which is legal only because those
+bytes are zero (checked by `unpack_rom.py`).
+
+**Duplicate addresses.** 28 files define code at `0x801E1BE0`. Names are `$VRAM_$ROM`
+(`func_801E1BE0_12BEDA0`): the ROM suffix is the synthetic offset and so names the file
+(`include/hh/file_table.h`). All overlays share `exclusive_ram_id: overlay`, so a reference into another
+window is never bound to one file; it stays undefined (`gen_link_syms.py` assigns the address).
+
+**Naming library functions** changes what N64Recomp emits. The rules, and why the Controller Pak chain is
+left unnamed, are at the top of `recomp/symbol_addrs.txt`. Tools: `match_donor_syms.py` (bodies vs other
+ports' ELFs, names only), `callgraph.py` (callers, callees, registers), `jal_audit.py` (every call target
+classified; must report 0 mid-function and 0 nowhere).
+
 ## Recompiling
 
 ## The harness
@@ -102,6 +128,10 @@ second run reported every patch already applied.
 | `tools/identify_rom.py <rom>` | identity and hashes; exits non-zero on any other dump |
 | `tools/survey_rom.py <rom>` | microcode strings, plain-code blocks, JAL floor (its flat-image window overruns into data for this game: see findings/phase-00) |
 | `tools/nisitenma.py <rom> [--list] [--extract DIR]` | file table, LZKN64 decompression of every file, code classification, reserved regions, aspMain byte check |
+| `tools/verify_elf.py` (WSL) | phase-01 gate: segment bytes, symbol placement, ABS/zero-size/overlapping FUNCs |
+| `tools/jal_audit.py` (WSL) | every `jal` target: own/global function start, cross-window, mid-function, nowhere |
+| `tools/match_donor_syms.py [--near] [--write]` (WSL) | library names from donor bodies |
+| `tools/callgraph.py [--dis] <fn>` | callers, callees, hardware pages, cop0/cop1 registers |
 
 ### Environment variables
 

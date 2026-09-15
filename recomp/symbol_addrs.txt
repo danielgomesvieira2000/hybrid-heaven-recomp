@@ -1,3 +1,215 @@
-// Hand-verified and matched symbol names for splat (name = 0xVRAM; type:func size:0x..).
-// Entry stub: 0x38 bytes, ends jr $t2 to 0x80001078.
+// Symbol names for splat (name = 0xVRAM; type:func size:0x..).
+//
+// A libultra name is not a label (playbook 03): N64Recomp hands a function with
+// a reimplemented name to the runtime, and drops one with an ignored name. So a
+// name is written here only when the body proves it. Two sources:
+//
+//   * the hand-verified block below, each with its evidence (tools/callgraph.py
+//     re-derives callers, callees and the registers a body touches);
+//   * the generated block at the end, from tools/match_donor_syms.py (bodies
+//     identical to library functions in other games' symbol-rich ELFs).
+//
+// Deliberately NOT named, although identified: the Controller Pak and Rumble Pak
+// plumbing (__osSiGetAccess 0x80027EB0, __osSiRelAccess 0x80027EF4,
+// __osSiCreateAccessQueue 0x80027E60, __osContGetInitData 0x80028090,
+// __osPfsGetInitData 0x8002AA40, __osPackReadData 0x800284C0, osPfsIsPlug
+// 0x8002A7D0, __osPfsRequestData 0x8002A970, __osPackRequestData 0x80028160).
+// Named, N64Recomp would either swap in librecomp's "no pak" answers or emit
+// nothing; unnamed, the game's own code runs and reaches the port through
+// __osSiRawStartDma (docs/findings/phase-01.md, playbook 05 "Saves").
+
+// ---- hand-verified ------------------------------------------------------------
+
+// Entry stub: clears bss 0x8004DBD0 +0x80DC0, sets $sp, `jr $t2` to 0x80001078.
 entrypoint = 0x80000400; // type:func size:0x38
+
+// First call in main (0x80001078). Calls __osGetSR/__osSetSR (Status), __osSetFpcCsr,
+// osWritebackDCache, osInvalICache, a cop0 TLB-reset leaf and bzero; touches the
+// AI page. That sequence is osInitialize (reimplemented by librecomp).
+osInitialize = 0x80028B10; // type:func
+// Called by main; probes RAM from 0x400000 in 0x100000 steps up to 0x800000 with a
+// write/read-back pattern at 0xA0000000-relative addresses; main compares the
+// result with 0x400000. osGetMemSize (reimplemented).
+osGetMemSize = 0x8002C0B0; // type:func
+// Reads and writes cop0 register 12 (Status); called in a pair with __osRestoreInt
+// by 27 functions including osSendMesg/osRecvMesg/osCreateThread.
+__osDisableInt = 0x80032660; // type:func
+// Creates a message queue, the PI access queue (0x8002ADD0), sets the PI event
+// message, raises its own priority, creates and starts the manager thread. The
+// donor body (Beetle, 2.0I) matches at 0.94. osCreatePiManager (reimplemented).
+osCreatePiManager = 0x8002AC60; // type:func
+// Touches SP_STATUS (0xA4040010) and SP_PC (0xA4080000); called by osSpTaskLoad.
+// __osSpSetPc (reimplemented). Donor body 0.96.
+__osSpSetPc = 0x80035090; // type:func
+// Called by osCreateViManager, osCreatePiManager and the game's SI setup with an
+// event id and queue; disables interrupts, stores into the event table, sends the
+// message when the event is pre-NMI. osSetEventMesg (reimplemented).
+osSetEventMesg = 0x8002FB60; // type:func
+// Called from main with 0x4A and 0xAA (gamma/dither/divot/dither-filter flag sets),
+// under __osDisableInt. osViSetSpecialFeatures (reimplemented).
+osViSetSpecialFeatures = 0x80032890; // type:func
+// Float argument stored at __osViNext+0x24 (y scale factor), state |= 4
+// (VI_STATE_YSCALE_UPDATED). osViSetYScale (reimplemented).
+osViSetYScale = 0x80034DE0; // type:func
+// Divides the VI clock by the argument, writes AI_DACRATE (0xA4500010) and
+// AI_BITRATE (0xA4500014), clamps the bit rate at 16. osAiSetFrequency
+// (reimplemented).
+osAiSetFrequency = 0x80031670; // type:func
+// __osViNext is D_8004AED4: osViSwapBuffer (matched) writes its framebuffer field.
+// 0x80035050 returns __osViCurr->framep (D_8004AED0), 0x80028F20 __osViNext->framep.
+osViGetCurrentFramebuffer = 0x80035050; // type:func
+osViGetNextFramebuffer = 0x80028F20; // type:func
+// Returns __osViCurr (D_8004AED0).
+__osViGetCurrentContext = 0x800349D0; // type:func
+// libultra 2.0I osContStartReadData exactly: SI access; if __osContLastCmd
+// (0x800CBFC0) != 1 { __osPackReadData; __osSiRawStartDma(WRITE, __osContPifRam
+// 0x800CBF80); osRecvMesg } ; __osSiRawStartDma(READ); last command = 1; release.
+osContStartReadData = 0x800283B0; // type:func
+// Walks __osContPifRam for __osMaxControllers (0x800CBFC1) pads into the caller's
+// OSContPad array (the game passes 0x8005CE50, 4 pads x 6 bytes). osContGetReadData.
+osContGetReadData = 0x80028434; // type:func
+// PI access; handle base 0xB0000000; bzero(transferInfo, 0x60); reads and restores
+// PI_BSD_DOM1 LAT/PWD/PGS/RLS (0xA4600014-20) around a ROM header read; links the
+// handle into the PI table under __osDisableInt. osCartRomInit (reimplemented).
+osCartRomInit = 0x80032BE0; // type:func
+
+// The exception vector code, one handwritten routine splat cut as a single
+// 0x534-byte function: a 0x10-byte preamble (`lui/addiu $k0; jr $k0`) jumping to
+// __osException at 0x800270C0. Both names are in N64Recomp's ignored set.
+__osExceptionPreamble = 0x800270B0; // type:func size:0x10
+__osException = 0x800270C0; // type:func size:0x524
+// Writes cop0 EPC (14) and Status (12) and restores the FPU CSR from a thread,
+// reached from osStartThread/osDestroyThread; donor body 0.99 (Beetle). The label
+// 0x800279A0 inside splat's function is __osCleanupThread, the return address
+// osCreateThread installs.
+__osDispatchThread = 0x80027824; // type:func size:0x17C
+__osCleanupThread = 0x800279A0; // type:func size:0x10
+
+// ---- matched by tools/match_donor_syms.py (do not edit this block) ----
+osSendMesg = 0x80026300; // type:func size:0x14C (body = BAR,PW64,WR64)
+osStopThread = 0x800265F0; // type:func size:0xC0 (body = BAR)
+osRecvMesg = 0x800266B0; // type:func size:0x138 (body = BAR,PW64,WR64)
+osSetIntMask = 0x800267F0; // type:func size:0xA0 (body = BAR)
+alUnlink = 0x80026890; // type:func size:0x30 (body = BAR,PW64)
+alLink = 0x800268C0; // type:func size:0x24 (body = BAR,PW64)
+alClose = 0x800268E4; // type:func size:0x38 (body = BAR,PW64)
+alInit = 0x8002691C; // type:func size:0x34 (body = BAR,PW64)
+alSynSetVol = 0x80026950; // type:func size:0x9C (body = BAR,PW64)
+_VirtualToPhysicalTask = 0x800269F0; // type:func size:0x11C (body = WR64)
+osSpTaskLoad = 0x80026B0C; // type:func size:0x190 (body = BAR)
+osSpTaskStartGo = 0x80026C9C; // type:func size:0x40 (body = BAR,PW64,WR64)
+osDestroyThread = 0x80026CE0; // type:func size:0x104 (body = BAR)
+__ull_rshift = 0x80026DF0; // type:func size:0x2C (body = BAR,PW64,WR64)
+__ull_div = 0x80026E58; // type:func size:0x3C (body = BAR,PW64,WR64)
+__ll_lshift = 0x80026E94; // type:func size:0x2C (body = BAR,PW64,WR64)
+__ll_div = 0x80026EFC; // type:func size:0x5C (body = BAR,PW64,WR64)
+__ll_mul = 0x80026F58; // type:func size:0x30 (body = BAR,PW64,WR64)
+__ull_divremi = 0x80026F88; // type:func size:0x60 (body = BAR,PW64,WR64)
+__ll_mod = 0x80026FE8; // type:func size:0x9C (body = BAR,PW64,WR64)
+__ll_rshift = 0x80027084; // type:func size:0x2C (body = BAR,PW64,WR64)
+__osEnqueueAndYield = 0x800276CC; // type:func size:0x100 (body = BAR)
+__osEnqueueThread = 0x800277CC; // type:func size:0x48 (body = BAR,PW64,WR64)
+__osPopThread = 0x80027814; // type:func size:0x10 (body = BAR,PW64,WR64)
+__osDequeueThread = 0x800279B0; // type:func size:0x40 (body = BAR,PW64,WR64)
+bzero = 0x800279F0; // type:func size:0x9C (body = BAR,PW64,WR64)
+osContInit = 0x80027F20; // type:func size:0x170 (body = BAR)
+osCreateThread = 0x80028260; // type:func size:0x144 (body = BAR,PW64,WR64)
+alBnkfNew = 0x80028694; // type:func size:0x104 (body = BAR,PW64,WR64)
+alSeqFileNew = 0x80028798; // type:func size:0x40 (body = BAR,PW64,WR64)
+_allocatePVoice = 0x800287E0; // type:func size:0xE8 (body = BAR,PW64)
+alSynAllocVoice = 0x800288C8; // type:func size:0x140 (body = BAR,PW64)
+osVirtualToPhysical = 0x80028A10; // type:func size:0x7C (body = BAR,PW64,WR64)
+osWritebackDCache = 0x80028A90; // type:func size:0x74 (body = BAR,PW64,WR64)
+__osSetSR = 0x80028EC0; // type:func size:0x10 (body = BAR,PW64,WR64)
+__osGetSR = 0x80028ED0; // type:func size:0xC (body = BAR,PW64,WR64)
+alSynSetFXParam = 0x80028EE0; // type:func size:0x40 (body = BAR)
+alSynStartVoice = 0x80028F60; // type:func size:0x8C (body = BAR,PW64)
+__osSiRawStartDma = 0x800294D0; // type:func size:0xAC (body = BAR)
+osViBlack = 0x800295D0; // type:func size:0x70 (body = BAR,PW64,WR64)
+osSpTaskYield = 0x80029690; // type:func size:0x20 (body = BAR,PW64,WR64)
+guMtxF2L = 0x80029D30; // type:func size:0x100 (body = WR64)
+guMtxIdentF = 0x80029E30; // type:func size:0x88 (body = WR64)
+guMtxIdent = 0x80029EB8; // type:func size:0x30 (body = WR64)
+osViSetMode = 0x80029FA0; // type:func size:0x68 (body = BAR,PW64,WR64)
+alSynSetPitch = 0x8002AB10; // type:func size:0x84 (body = BAR,PW64)
+__osProbeTLB = 0x8002ABA0; // type:func size:0xB8 (body = BAR,PW64,WR64)
+alSynSetPan = 0x8002B380; // type:func size:0x84 (body = BAR,PW64)
+osGetCount = 0x8002BF90; // type:func size:0xC (body = BAR,PW64,WR64)
+osPiStartDma = 0x8002BFA0; // type:func size:0x10C (body = BAR)
+alSynNew = 0x8002C1D0; // type:func size:0x300 (body = BAR,PW64)
+__allocParam = 0x8002C6A0; // type:func size:0x30 (body = BAR,PW64)
+__freeParam = 0x8002C6D0; // type:func size:0x18 (body = BAR,PW64)
+_collectPVoices = 0x8002C6E8; // type:func size:0x60 (body = BAR,PW64)
+_freePVoice = 0x8002C748; // type:func size:0x38 (body = BAR,PW64)
+init_lpfilter = 0x8002C850; // type:func size:0xA0 (body = BAR,PW64)
+alFxNew = 0x8002C8F0; // type:func size:0x43C (body = BAR)
+alLoadNew = 0x8002CDD4; // type:func size:0xA8 (body = BAR,PW64)
+alAuxBusNew = 0x8002CF08; // type:func size:0x54 (body = BAR,PW64)
+alMainBusNew = 0x8002CF5C; // type:func size:0x54 (body = BAR,PW64)
+alSaveNew = 0x8002CFB0; // type:func size:0x44 (body = BAR,PW64)
+alMainBusPull = 0x8002D030; // type:func size:0x120 (body = BAR,PW64)
+alFxPull = 0x8002D150; // type:func size:0x340 (body = BAR,PW64)
+alFxParam = 0x8002D490; // type:func size:0x18 (body = BAR,PW64)
+alFxParamHdl = 0x8002D4A8; // type:func size:0x25C (body = BAR)
+_doModFunc = 0x8002DD00; // type:func size:0xA8 (body = BAR,PW64)
+alAuxBusPull = 0x8002DDE0; // type:func size:0xD8 (body = BAR,PW64)
+alEnvmixerParam = 0x8002E3C8; // type:func size:0xE0 (body = BAR,PW64)
+_frexpf = 0x8002E790; // type:func size:0xEC (body = BAR,PW64)
+_ldexpf = 0x8002E87C; // type:func size:0x28 (body = BAR,PW64)
+alResampleParam = 0x8002EB40; // type:func size:0xEC (body = BAR,PW64)
+alResamplePull = 0x8002EC2C; // type:func size:0x208 (body = BAR,PW64)
+alLoadParam = 0x8002F010; // type:func size:0x1D4 (body = BAR,PW64)
+alRaw16Pull = 0x8002F1E4; // type:func size:0x3AC (body = BAR,PW64)
+alAdpcmPull = 0x8002F6BC; // type:func size:0x4A0 (body = BAR,PW64)
+guLookAtHilite = 0x80030388; // type:func size:0xB8 (body = WR64)
+alFilterNew = 0x80030480; // type:func size:0x1C (body = BAR,PW64)
+alHeapInit = 0x800305D0; // type:func size:0x34 (body = BAR,PW64)
+osCreateMesgQueue = 0x80030610; // type:func size:0x2C (body = BAR,PW64,WR64)
+osInvalICache = 0x80030640; // type:func size:0x74 (body = BAR,PW64,WR64)
+osInvalDCache = 0x800306C0; // type:func size:0xAC (body = BAR,PW64,WR64)
+alSavePull = 0x80030810; // type:func size:0x8C (body = BAR,PW64)
+alSaveParam = 0x8003089C; // type:func size:0x34 (body = BAR,PW64)
+alSynGetFXRef = 0x80030930; // type:func size:0x78 (body = BAR)
+__osSpDeviceBusy = 0x800309B0; // type:func size:0x2C (body = BAR,PW64,WR64)
+__osSiDeviceBusy = 0x800309E0; // type:func size:0x2C (body = BAR,PW64,WR64)
+osJamMesg = 0x80030A10; // type:func size:0x150 (body = BAR,PW64,WR64)
+osSetThreadPri = 0x80030B60; // type:func size:0xE0 (body = BAR,PW64,WR64)
+osGetThreadPri = 0x80030C40; // type:func size:0x18 (body = BAR,PW64,WR64)
+osViSwapBuffer = 0x80030DC0; // type:func size:0x50 (body = BAR,PW64,WR64)
+osSpTaskYielded = 0x80030FF0; // type:func size:0x80 (body = BAR,PW64,WR64)
+bcmp = 0x80031070; // type:func size:0x11C (body = BAR)
+osGetTime = 0x80031190; // type:func size:0x84 (body = BAR,PW64,WR64)
+__osTimerServicesInit = 0x80031220; // type:func size:0x8C (body = BAR,PW64,WR64)
+__osTimerInterrupt = 0x800312AC; // type:func size:0x178 (body = BAR,PW64,WR64)
+__osSetTimerIntr = 0x80031424; // type:func size:0x74 (body = BAR,PW64,WR64)
+__osInsertTimer = 0x80031498; // type:func size:0x188 (body = BAR,PW64,WR64)
+__osSetGlobalIntMask = 0x80031620; // type:func size:0x4C (body = BAR)
+__osSetCompare = 0x800317C0; // type:func size:0xC (body = BAR,PW64,WR64)
+bcopy = 0x800317D0; // type:func size:0x304 (body = BAR,PW64,WR64)
+alCopy = 0x80031AE0; // type:func size:0x74 (body = BAR,PW64)
+__osResetGlobalIntMask = 0x80031B60; // type:func size:0x58 (body = BAR)
+guOrthoF = 0x80031E30; // type:func size:0x154 (body = WR64)
+guOrtho = 0x80031F84; // type:func size:0x68 (body = WR64)
+__osViInit = 0x80032220; // type:func size:0x13C (body = BAR)
+__osViSwapContext = 0x80032360; // type:func size:0x2F8 (body = BAR)
+__osRestoreInt = 0x800326D0; // type:func size:0x1C (body = BAR,PW64,WR64)
+osPiGetCmdQueue = 0x800326F0; // type:func size:0x28 (body = BAR,PW64,WR64)
+osViSetEvent = 0x800329F0; // type:func size:0x6C (body = BAR,PW64,WR64)
+alSynAddPlayer = 0x80032A60; // type:func size:0x50 (body = BAR,PW64)
+__osSetFpcCsr = 0x80032DC0; // type:func size:0x10 (body = BAR,PW64,WR64)
+osAiGetLength = 0x80033C60; // type:func size:0xC (body = PW64,WR64)
+osMapTLBRdb = 0x80033C70; // type:func size:0x58 (body = BAR,PW64,WR64)
+osYieldThread = 0x80033CD0; // type:func size:0x4C (body = BAR)
+__osGetCause = 0x80033E00; // type:func size:0xC (body = PW64,WR64)
+osSetTimer = 0x80034560; // type:func size:0xD4 (body = BAR,PW64,WR64)
+__osSpSetStatus = 0x80034690; // type:func size:0xC (body = BAR,PW64,WR64)
+__osSpGetStatus = 0x800346A0; // type:func size:0xC (body = BAR,PW64,WR64)
+osCreateViManager = 0x800346C0; // type:func size:0x180 (body = BAR)
+osWritebackDCacheAll = 0x800349E0; // type:func size:0x28 (body = BAR,PW64,WR64)
+alHeapDBAlloc = 0x80034A10; // type:func size:0x54 (body = BAR,PW64)
+osStartThread = 0x80034C90; // type:func size:0x150 (body = BAR,PW64,WR64)
+alSynAllocFX = 0x80034E40; // type:func size:0x98 (body = BAR,PW64)
+alSynStopVoice = 0x80034EE0; // type:func size:0x78 (body = BAR,PW64)
+osAiSetNextBuffer = 0x80034F70; // type:func size:0xA4 (body = BAR)
+__osAiDeviceBusy = 0x80035020; // type:func size:0x30 (body = BAR,PW64,WR64)
+// ---- end matched ----

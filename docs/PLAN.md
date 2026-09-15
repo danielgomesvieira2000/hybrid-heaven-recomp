@@ -11,7 +11,8 @@ session runs autonomously: at each choice the recommended option is taken and lo
 
 > **Departures from this plan** (added as they happen):
 >
-> - none yet
+> - *Phase 01*: the ELF has **93** code segments (resident + 92 files), not 92: file 99 has one
+>   function besides its data. Everything else as planned. ([findings/phase-01.md](findings/phase-01.md))
 
 ## Goal
 

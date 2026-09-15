@@ -20,7 +20,7 @@ are kept; inference is marked *inferred*.
 | Header CRC | `0x102888BF 0x434888CA` |
 | Entry point | `0x80000400` |
 | libultra | *inferred* 2.0I (header `+0xC` = `0x00001449`) |
-| Save type | Controller Pak; Rumble Pak supported (ares, mupen64plus databases; not yet confirmed in code) |
+| Save type | Controller Pak: the game calls `osPfsIsPlug` (0x8002A7D0, from 0x8000281C). Rumble Pak per databases (not yet traced in code) |
 | Players | 2 (mupen64plus database; not yet confirmed in code) |
 | Expansion Pak | optional; boot compares the memory size with `0x400000` |
 | Graphics microcode | F3DEX2 fifo 2.06 (string at ROM `0x4E228`) |
@@ -30,7 +30,7 @@ are kept; inference is marked *inferred*.
 
 | Region | ROM → VRAM | Notes |
 |---|---|---|
-| Resident image | `0x1000–0x4E7D0` → `0x80000400–0x8004DBD0` | code to ~`0x80036400`, then RSP microcode (`rspboot`, `aspMain`, F3DEX2) and data |
+| Resident image | `0x1000–0x4E7D0` → `0x80000400–0x8004DBD0` | CPU code `0x80000400–0x800350C0` (game code, then libultra from ~`0x80026300`); `rspboot` at `0x800350C0`, graphics microcode text, `aspMain` text at `0x80036530`, then data |
 | Resident bss | → `0x8004DBD0–0x800CE990` | cleared by the entry stub; boot `$sp = 0x80057BD0` |
 | File id 2 (no data) | → `0x800CE9C0–0x800F41C0` | reserved region |
 | File id 4, 7 (no data) | → `0x800F41C0–0x80107830` | reserved regions |
@@ -84,6 +84,39 @@ format at `0x80003A7C`, unused by the table).
 | `0xA0–0xDF` | next byte × `(c & 0x1F) + 2` |
 | `0xE0–0xFE` | zero × `(c & 0x1F) + 2` |
 | `0xFF` | zero × `next + 2` |
+
+### Per-file layout (measured, `tools/unpack_rom.py` → `unpacked/segments.json`)
+
+Every code file is text, zero padding, data, then bss up to its table end. Text ends just past the last
+`jr $ra` (no prologue after it in any file); the padding up to the next multiple of 16 is zero in every
+file. Largest files: 8 (text `0x4B840`, data `0x3E4B0`, bss `0x2DC80`), 10 (text `0x320D0`), 57 (text
+`0x2CCB0`). The 41 small files at `0x8038CFC0` are about `0xA00` bytes of text each with about `0xA0`
+of data.
+
+### Calls between files
+
+Overlays call functions in other overlays' windows directly (`jal`), 15,251 sites. For example, file 26
+(`0x801E1BE0`) calls into files 99/100 (`0x8038B…`) and 24/25 (`0x801C0B8C`), so windows are loaded
+together in combinations the code assumes. 0 calls land mid-function; every cross-window target starts
+a function in at least one file (`tools/jal_audit.py`).
+
+## libultra
+
+Version 2.0I (header; bodies identical to Beetle Adventure Racing's 2.0I libultra). Resident, from about
+`0x80026300` to `0x800350C0`, with the audio library (`al*`) and `gu*` mixed in. 147 names with
+evidence: `recomp/symbol_addrs.txt`. Addresses of note:
+
+| Address | Name | Note |
+|---|---|---|
+| `0x800270B0` / `0x800270C0` | `__osExceptionPreamble` / `__osException` | one handwritten routine; preamble is 0x10 bytes |
+| `0x80027824` / `0x800279A0` | `__osDispatchThread` / `__osCleanupThread` | |
+| `0x80028B10` | `osInitialize` | first call in `main` |
+| `0x8002C0B0` | `osGetMemSize` | probes 4→8 MB |
+| `0x800283B0` / `0x80028434` | `osContStartReadData` / `osContGetReadData` | pad array `0x8005CE50`, 4 × 6 bytes |
+| `0x800294D0` | `__osSiRawStartDma` | the Controller Pak seam |
+| `0x8002A7D0` | (osPfsIsPlug, left unnamed) | Pak detection; called from `0x8000281C` |
+| `0x8004AED0` / `0x8004AED4` | `__osViCurr` / `__osViNext` | from `osViSwapBuffer` and the framebuffer getters |
+| `0x800CBF80` / `0x800CBFC0` / `0x800CBFC1` | `__osContPifRam` / `__osContLastCmd` / `__osMaxControllers` | from `osContStartReadData` |
 
 ## The main loop and game states
 
