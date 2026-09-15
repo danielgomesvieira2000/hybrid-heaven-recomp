@@ -216,6 +216,19 @@ between 0x07 and 0xD3, so a walker that reaches such a byte has left the list.
 | `HH_FULL_FRAME=0` | keep the game's overscan scissors (pillarboxed at 16:9); full frame is the default |
 | `HH_DL_CENSUS=<n>` | every n-th list: colour images, viewports, scissors, projections, triangles, rectangles (read-only) |
 | `HH_WINDOW_SIZE=WxH` | windowed test run at that size |
+| `HH_NO_HUD_REWRITE=1` | never submit the rewritten copy (classes still listed in F1) |
+| `HH_HUD_REWRITE_TRACE=1` | each identity the rewriter meets, once, with its class and whether it was a call, a branch or a rectangle |
+| `HH_TEST_HUD_OVERRIDE=<identity>=<class>@<s>` | set a class as the panel's dropdown would, after that many seconds |
+
+**The HUD, live.** `src/dlcensus.cpp` publishes every frame's 2D elements to the F1 "Hybrid Heaven
+HUD" panel: `tex:<image>`, `fill:<colour>`, and `dl:<list>` for orthographic triangles. While any
+element has a class (dropdown, or `hud.json` in the settings folder, loaded at startup),
+`src/hudrewrite.cpp` copies the frame's lists to `0x807A0000` / `0x807C8000` and inserts RT64's
+extended GBI around the classified draws. The change shows on the next frame.
+
+**Symptom: part of a HUD widget moves and part stays.** One of its lists is reached by a `G_DL`
+branch rather than a call (the radar dial, `dl:0x80181860`). A branch never returns, so the class is
+applied from the branch to the inlined list's end command.
 
 ## Frame interpolation
 

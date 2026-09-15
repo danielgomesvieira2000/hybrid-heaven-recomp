@@ -188,11 +188,13 @@ void draw_panel() {
     ImGui::TextDisabled("F1 closes this menu. RT64's own pause (Debugger tab) freezes the");
     ImGui::TextDisabled("game; Hold keeps this list on one frame while the game runs on.");
     if (frame.number == 0) {
-        // Nothing has called begin_frame yet: there is no 2D classifier in this
-        // build (docs/PLAN.md phase 07, D11). Said, so an empty list is not read
-        // as "the frame has no HUD".
-        ImGui::TextDisabled("No classifier is feeding this panel yet (phase 07).");
+        // Nothing has called begin_frame: the feed is off (HH_INSPECTOR=0 would
+        // also hide this panel) or no display list has been submitted yet.
+        ImGui::TextDisabled("No frame has been published yet.");
     }
+    // src/dlcensus.cpp lists the elements; src/hudrewrite.cpp draws them with
+    // the class chosen here, from the next frame.
+    ImGui::TextDisabled("A class takes effect on the next frame; Save keeps it for the next session.");
 
     bool hold = g_hold;
     if (ImGui::Checkbox("Hold this frame", &hold)) {
@@ -358,7 +360,38 @@ void init() {
     if (!g_enabled) {
         std::fprintf(stderr, "[hh] HUD inspector off (HH_INSPECTOR=0)\n");
         std::fflush(stderr);
+        return;
     }
+
+    // Classes saved with "Save to hud.json" come back as the starting overrides,
+    // so they are drawn from the first frame of the next session
+    // (src/hudrewrite.cpp) and can still be changed live in the panel.
+    std::ifstream in(tag_path());
+    if (!in) return;
+    try {
+        nlohmann::json doc;
+        in >> doc;
+        const char* lists[] = { "center", "left", "right", "stretch", "spill" };
+        std::lock_guard<std::mutex> lock(g_mutex);
+        for (int c = 0; c < 5; ++c) {
+            if (!doc.contains(lists[c]) || !doc[lists[c]].is_array()) continue;
+            for (const auto& id : doc[lists[c]]) {
+                if (id.is_string()) g_overrides[id.get<std::string>()] = c;
+            }
+        }
+        g_any_overrides.store(!g_overrides.empty(), std::memory_order_relaxed);
+        std::fprintf(stderr, "[hh] HUD inspector: %zu class(es) loaded from %s\n",
+                     g_overrides.size(), tag_path().string().c_str());
+        std::fflush(stderr);
+    }
+    catch (const std::exception& e) {
+        std::fprintf(stderr, "[hh] HUD inspector: could not read hud.json (%s); ignored\n", e.what());
+        std::fflush(stderr);
+    }
+}
+
+bool any_overrides() {
+    return g_enabled && g_any_overrides.load(std::memory_order_relaxed);
 }
 
 void install() {

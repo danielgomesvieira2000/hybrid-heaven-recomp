@@ -5,7 +5,9 @@
 // command's two words and a matrix's words are read with a plain memcpy.
 
 #include "hh/dlcensus.h"
+#include "hh/inspector.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -22,7 +24,7 @@ constexpr uint8_t kVtx = 0x01, kTri1 = 0x05, kTri2 = 0x06, kQuad = 0x07;
 constexpr uint8_t kMtx = 0xDA, kMoveWord = 0xDB, kMoveMem = 0xDC, kDl = 0xDE, kEndDl = 0xDF;
 constexpr uint8_t kTexRect = 0xE4, kTexRectFlip = 0xE5, kRdpHalf1 = 0xE1, kRdpHalf2 = 0xF1;
 constexpr uint8_t kSetScissor = 0xED, kFillRect = 0xF6, kSetFillColor = 0xF7, kSetTImg = 0xFD;
-constexpr uint8_t kSetCImg = 0xFF;
+constexpr uint8_t kSetCImg = 0xFF, kPopMtx = 0xD8;
 constexpr uint8_t kMwSegment = 0x06;    // G_MOVEWORD index
 constexpr uint8_t kMvViewport = 0x08;   // G_MOVEMEM index
 constexpr uint8_t kMtxProjection = 0x04;
@@ -86,6 +88,83 @@ struct Census {
     std::vector<Rect> rects;
     std::vector<uint32_t> colour_images;
 
+    // ---- the HUD inspector's feed (hud == true) ----------------------------
+    //
+    // Where each 2D element of the frame lands, in the game's 320x240, for the
+    // F1 "Hybrid Heaven HUD" panel. The RSP's own transform state is mirrored
+    // closely enough to place a vertex: the modelview stack, the projection, the
+    // viewport, and the vertex buffer as it was transformed at load time.
+    bool hud = false;
+    struct Element {
+        std::string identity, second;
+        float x0, x1, y0, y1;
+        bool rect;
+    };
+    std::vector<Element> elements;
+    using M4 = double[4][4];
+    M4 projection = { { 1, 0, 0, 0 }, { 0, 1, 0, 0 }, { 0, 0, 1, 0 }, { 0, 0, 0, 1 } };
+    M4 modelview[18] = {};
+    int mv_depth = 0;
+    float vp_scale_x = 160.0f, vp_scale_y = 120.0f, vp_trans_x = 160.0f, vp_trans_y = 120.0f;
+    float to_320 = 1.0f;            // 0.5 while drawing into the 640x480 hi-res buffer
+    struct Screen { float x, y; bool ok; };
+    Screen verts[64] = {};
+    uint32_t list_id = 0;           // the called list being walked (its address as the caller gave it); 0 = top level
+
+    static void read_matrix(const uint8_t* rdram, uint32_t phys, M4& out) {
+        for (int e = 0; e < 16; ++e) out[e / 4][e % 4] = mtx_element(rdram, phys, e);
+    }
+    static void multiply(const M4& a, const M4& b, M4& out) {   // row vectors: out = a * b
+        M4 r = {};
+        for (int i = 0; i < 4; ++i)
+            for (int j = 0; j < 4; ++j)
+                for (int k = 0; k < 4; ++k) r[i][j] += a[i][k] * b[k][j];
+        std::memcpy(out, r, sizeof r);
+    }
+    bool projection_is_ortho() const {
+        return projection[0][3] == 0.0 && projection[1][3] == 0.0 && projection[2][3] == 0.0 &&
+               projection[3][3] != 0.0;
+    }
+    Screen place(int16_t x, int16_t y, int16_t z) const {
+        const double v[4] = { double(x), double(y), double(z), 1.0 };
+        double m[4] = {}, c[4] = {};
+        const M4& mv = modelview[mv_depth];
+        for (int j = 0; j < 4; ++j)
+            for (int k = 0; k < 4; ++k) m[j] += v[k] * mv[k][j];
+        for (int j = 0; j < 4; ++j)
+            for (int k = 0; k < 4; ++k) c[j] += m[k] * projection[k][j];
+        if (c[3] <= 0.0) return { 0, 0, false };
+        const double nx = c[0] / c[3], ny = c[1] / c[3];
+        return { float((nx * vp_scale_x + vp_trans_x) * to_320), float((-ny * vp_scale_y + vp_trans_y) * to_320), true };
+    }
+    void note(const std::string& identity, const std::string& second, float x0, float x1, float y0, float y1, bool rect) {
+        for (Element& e : elements) {
+            if (e.identity == identity && e.rect == rect) {
+                e.x0 = std::min(e.x0, x0); e.x1 = std::max(e.x1, x1);
+                e.y0 = std::min(e.y0, y0); e.y1 = std::max(e.y1, y1);
+                return;
+            }
+        }
+        if (elements.size() < 256) elements.push_back({ identity, second, x0, x1, y0, y1, rect });
+    }
+    static std::string hex_id(const char* kind, uint32_t value) {
+        char buf[32];
+        std::snprintf(buf, sizeof buf, "%s:0x%08x", kind, value);
+        return buf;
+    }
+    void note_triangle(int a, int b, int c) {
+        if (!hud || !projection_is_ortho()) return;
+        const Screen* v[3] = { &verts[a & 63], &verts[b & 63], &verts[c & 63] };
+        if (!v[0]->ok || !v[1]->ok || !v[2]->ok) return;
+        float x0 = v[0]->x, x1 = v[0]->x, y0 = v[0]->y, y1 = v[0]->y;
+        for (int i = 1; i < 3; ++i) {
+            x0 = std::min(x0, v[i]->x); x1 = std::max(x1, v[i]->x);
+            y0 = std::min(y0, v[i]->y); y1 = std::max(y1, v[i]->y);
+        }
+        note(list_id != 0 ? hex_id("dl", list_id) : hex_id("tex", image),
+             list_id != 0 ? hex_id("tex", image) : std::string(), x0, x1, y0, y1, false);
+    }
+
     uint32_t physical(uint32_t address) const {
         const uint32_t seg = (address >> 24) & 0x0F;
         if ((address >> 24) >= 0x80) return address & 0x1FFFFFFF;
@@ -127,10 +206,19 @@ struct Census {
                     const bool branch = ((w0 >> 16) & 0xFF) != 0;
                     if (branch) {
                         pc = physical(w1);
+                        list_id = w1;
                     }
                     else {
+                        const uint32_t caller = list_id;
+                        list_id = w1;
                         walk(w1, depth + 1);
+                        list_id = caller;
                     }
+                    break;
+                }
+                case kPopMtx: {
+                    const int pops = static_cast<int>(w1 / 64);
+                    mv_depth = std::max(0, mv_depth - pops);
                     break;
                 }
                 case kMoveWord:
@@ -148,6 +236,9 @@ struct Census {
                         const uint32_t t = word(rdram, vp + 8);
                         const int16_t sx = static_cast<int16_t>(s >> 16), sy = static_cast<int16_t>(s);
                         const int16_t tx = static_cast<int16_t>(t >> 16), ty = static_cast<int16_t>(t);
+                        vp_scale_x = sx / 4.0f; vp_scale_y = sy / 4.0f;
+                        vp_trans_x = tx / 4.0f; vp_trans_y = ty / 4.0f;
+                        if (hud) break;
                         char buf[96];
                         std::snprintf(buf, sizeof buf, "scale %.1f,%.1f trans %.1f,%.1f -> x %.1f..%.1f y %.1f..%.1f",
                                       sx / 4.0, sy / 4.0, tx / 4.0, ty / 4.0,
@@ -159,6 +250,23 @@ struct Census {
                 case kMtx: {
                     ++matrices;
                     const uint8_t params = static_cast<uint8_t>((w0 & 0xFF) ^ 0x01);   // F3DEX2 stores p ^ G_MTX_PUSH
+                    if (hud) {
+                        M4 m;
+                        read_matrix(rdram, physical(w1), m);
+                        if ((params & kMtxProjection) != 0) {
+                            if (params & kMtxLoad) std::memcpy(projection, m, sizeof m);
+                            else multiply(m, projection, projection);
+                        }
+                        else {
+                            if ((params & 0x01) != 0 && mv_depth < 17) {
+                                std::memcpy(modelview[mv_depth + 1], modelview[mv_depth], sizeof m);
+                                ++mv_depth;
+                            }
+                            if (params & kMtxLoad) std::memcpy(modelview[mv_depth], m, sizeof m);
+                            else multiply(m, modelview[mv_depth], modelview[mv_depth]);
+                        }
+                        break;
+                    }
                     if ((params & kMtxProjection) != 0) {
                         const uint32_t m = physical(w1);
                         const double m00 = mtx_element(rdram, m, 0), m11 = mtx_element(rdram, m, 5);
@@ -187,15 +295,33 @@ struct Census {
                     }
                     break;
                 }
-                case kVtx:
+                case kVtx: {
                     ++vtx_loads;
+                    if (!hud) break;
+                    // gSPVertex: count in bits 12-19, (first + count) << 1 in the low byte.
+                    const int count = static_cast<int>((w0 >> 12) & 0xFF);
+                    const int first = static_cast<int>((w0 & 0xFF) >> 1) - count;
+                    const uint32_t at = physical(w1);
+                    for (int i = 0; i < count && first + i < 64 && first + i >= 0; ++i) {
+                        const uint32_t xy = word(rdram, at + 16 * i);
+                        const uint32_t zf = word(rdram, at + 16 * i + 4);
+                        verts[first + i] = place(static_cast<int16_t>(xy >> 16), static_cast<int16_t>(xy),
+                                                 static_cast<int16_t>(zf >> 16));
+                    }
                     break;
+                }
                 case kTri1:
                 case kTri2:
                 case kQuad: {
                     const int n = (op == kTri1) ? 1 : 2;
                     tris += n;
-                    if (current_projection >= 0) tris_under_projection[current_projection] += n;
+                    if (current_projection >= 0 && !hud) tris_under_projection[current_projection] += n;
+                    // Indices are stored doubled: w0 = op, a*2, b*2, c*2; the second
+                    // triangle of TRI2/QUAD sits in w1 the same way.
+                    note_triangle(((w0 >> 16) & 0xFF) / 2, ((w0 >> 8) & 0xFF) / 2, (w0 & 0xFF) / 2);
+                    if (n == 2) {
+                        note_triangle(((w1 >> 16) & 0xFF) / 2, ((w1 >> 8) & 0xFF) / 2, (w1 & 0xFF) / 2);
+                    }
                     break;
                 }
                 case kSetScissor: {
@@ -227,14 +353,32 @@ struct Census {
                     break;
                 case kSetCImg:
                     colour_images.push_back(w1);
+                    // The hi-res buffer (docs/GAME-INTERNALS.md, Rendering) is 640 wide.
+                    to_320 = ((w1 & 0x00FFFFFF) == 0x00400000) ? 0.5f : 1.0f;
                     break;
-                case kFillRect:
-                    rects.push_back({ 'F', ((w1 >> 12) & 0xFFF) / 4.0f, (w1 & 0xFFF) / 4.0f,
-                                      ((w0 >> 12) & 0xFFF) / 4.0f, (w0 & 0xFFF) / 4.0f, fill_colour, current_scissor });
+                case kFillRect: {
+                    const float ulx = ((w1 >> 12) & 0xFFF) / 4.0f, uly = (w1 & 0xFFF) / 4.0f;
+                    const float lrx = ((w0 >> 12) & 0xFFF) / 4.0f, lry = (w0 & 0xFFF) / 4.0f;
+                    if (hud) {
+                        // Full-frame fills are the clears, not the HUD.
+                        const bool clear = ulx == 0.0f && uly == 0.0f && lrx * to_320 >= 319.0f && lry * to_320 >= 239.0f;
+                        if (!clear) {
+                            note(hex_id("fill", fill_colour), std::string(),
+                                 ulx * to_320, (lrx + 1.0f) * to_320, uly * to_320, (lry + 1.0f) * to_320, true);
+                        }
+                        break;
+                    }
+                    rects.push_back({ 'F', ulx, uly, lrx, lry, fill_colour, current_scissor });
                     break;
+                }
                 case kTexRect:
                 case kTexRectFlip:
-                    rects.push_back({ 'T', ((w1 >> 12) & 0xFFF) / 4.0f, (w1 & 0xFFF) / 4.0f,
+                    if (hud) {
+                        note(hex_id("tex", image), std::string(),
+                             ((w1 >> 12) & 0xFFF) / 4.0f * to_320, ((w0 >> 12) & 0xFFF) / 4.0f * to_320,
+                             (w1 & 0xFFF) / 4.0f * to_320, (w0 & 0xFFF) / 4.0f * to_320, true);
+                    }
+                    else rects.push_back({ 'T', ((w1 >> 12) & 0xFFF) / 4.0f, (w1 & 0xFFF) / 4.0f,
                                       ((w0 >> 12) & 0xFFF) / 4.0f, (w0 & 0xFFF) / 4.0f, image, current_scissor });
                     // F3DEX2 carries the texture coordinates in G_RDPHALF_1 (s, t)
                     // and G_RDPHALF_2 (dsdx, dtdy) commands that follow.
@@ -266,15 +410,39 @@ bool overscan_fix_enabled() {
     return on;
 }
 
-void snap_overscan(uint8_t* rdram, uint32_t list_address) {
+void per_frame(uint8_t* rdram, uint32_t list_address) {
+    const bool snap = overscan_fix_enabled();
+    const bool hud = hh::inspector::enabled();
+    if (!snap && !hud) return;
+
     Census c{ rdram };
-    c.writable = rdram;
+    c.writable = snap ? rdram : nullptr;
+    c.hud = hud;
+    for (int i = 0; i < 4; ++i) c.modelview[0][i][i] = 1.0;
     c.walk(list_address, 0);
+
     static bool reported = false;
     if (!reported && c.snapped > 0) {
         reported = true;
         std::fprintf(stderr, "[hh] HH_FULL_FRAME: first list with an overscan scissor: %d snapped\n", c.snapped);
         std::fflush(stderr);
+    }
+
+    if (hud) {
+        hh::inspector::begin_frame(0);   // no game-state variable identified yet
+        for (const auto& e : c.elements) {
+            int given = hh::inspector::kAuto;
+            hh::inspector::override_class(e.identity.c_str(), &given);
+            hh::inspector::note_element(e.identity.c_str(), e.second.c_str(), e.x0, e.x1, e.y0, e.y1,
+                                        false, given, e.rect);
+        }
+        hh::inspector::end_frame();
+        static bool announced = false;
+        if (!announced && !c.elements.empty()) {
+            announced = true;
+            std::fprintf(stderr, "[hh] HUD inspector: first frame with 2D elements: %zu\n", c.elements.size());
+            std::fflush(stderr);
+        }
     }
 }
 

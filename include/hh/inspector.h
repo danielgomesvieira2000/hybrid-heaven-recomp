@@ -61,6 +61,10 @@ void end_frame();
 // next frame and can be undone without restarting.
 bool override_class(const char* identity, int* out_class);
 
+// Whether any identity has a class set (panel or hud.json). Lock-free; the
+// rewriter checks it before copying anything.
+bool any_overrides();
+
 // ---- the panel's side, on the renderer's UI thread --------------------------
 
 // Installs the panel into RT64's inspector. Safe to call when disabled.

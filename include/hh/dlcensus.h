@@ -30,6 +30,11 @@ void run(const uint8_t* rdram, uint32_t list_address);
 // window's edges and RT64 treats the frame as one it can widen. Other scissors
 // (the hi-res letterbox, split views) are left alone.
 bool overscan_fix_enabled();
-void snap_overscan(uint8_t* rdram, uint32_t list_address);
+
+// The pass every submitted list gets: the overscan snap above (unless
+// HH_FULL_FRAME=0), and the HUD inspector's feed -- every 2D element of the frame
+// (texture and fill rectangles, triangles under an orthographic projection) with
+// its identity and its extent in 320x240 -- unless HH_INSPECTOR=0.
+void per_frame(uint8_t* rdram, uint32_t list_address);
 
 }  // namespace hh::dlcensus

@@ -93,3 +93,48 @@ every third of a second cannot show it. RT64's free camera (F1) settles it (play
   is now on by default and `HH_FULL_FRAME=0` turns it off. Verified with no switch set: a 1280×720
   window shows the picture edge to edge, and the log reads
   `HH_FULL_FRAME: overscan scissors are drawn full frame` then `... 1 snapped`.
+
+## The HUD inspector, fed and applied live
+
+Daniel: "The HUD debug is not working, it is always empty." Then: "I want changes to update in
+real-time."
+
+**Why it was empty:** the panel came from Wave Race 64, but nothing called `begin_frame` /
+`note_element`. Wave Race's classifier lives in its display-list rewriter, which was not copied.
+
+### Feed (`src/dlcensus.cpp` `per_frame`)
+
+The pass every list already gets (the full-frame snap) also mirrors the RSP's transform state:
+modelview stack, projection, viewport and the vertex buffer as transformed at load. Each frame it
+publishes:
+- texture rectangles as `tex:<image>` and fill rectangles as `fill:<colour>`, skipping the full-frame
+  clears;
+- triangles under an orthographic projection as `dl:<called list>` (second identity: the texture),
+  or `tex:<image>` at the top level.
+
+Extents are in 320×240; the hi-res buffer is halved.
+
+Exploration (the attract scene at 24 s, 1280×720): `tex:0x802866f8` and `tex:0x80286af8` (27..59,
+19..51: the radar's two rectangle layers), `dl:0x80181860` (12..72, 5..65: the radar dial). The
+panel's yellow outline sits on the radar. Later frames add `dl:0x03000f10` (146..352 × 59..226),
+`dl:0x030002e0` and `fill:0x00000000` (197..278 × 143..224).
+
+### Apply (`src/hudrewrite.cpp`)
+
+While any identity has a class (panel or `hud.json`, now loaded at startup), each list is copied
+into scratch RDRAM at `0x807A0000` / `0x807C8000`, alternating per frame. Wave Race's extended-GBI
+emission is inserted around classified draws: rectangle align or aspect, viewport align with the
+viewport reissued, a projection group, and a widened scissor. With no class set nothing is copied.
+
+**Wrong turn:** the radar dial is reached by a `G_DL` **branch**, not a call, so wrapping calls left
+it behind. The disc and dial came apart; the log said `2 classified element draw(s)`, and the trace
+(`HH_HUD_REWRITE_TRACE=1`) printed `branch (not wrapped) dl:0x80181860 class 1`. A classified branch
+is now wrapped from the branch to the inlined list's end command. The log then says 3, and the
+**whole radar moves to the window's left edge**; `HH_NO_HUD_REWRITE=1` puts it back (A/B frames at
+24 s).
+
+**Test-hygiene error:** a `build/portable.txt` left behind by the panel A/B runs meant Daniel's own
+session with `build\hybrid-heaven-recomp.exe` kept its settings in `build/`. His `hud.json` (the
+three radar identities as `left`) was moved to `%LOCALAPPDATA%\hybrid-heaven-recomp\`. The
+`controller_pak_1.pak` in `build/` from that session was deleted during cleanup before this was
+noticed.

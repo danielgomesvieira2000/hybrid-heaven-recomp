@@ -275,7 +275,7 @@ if(HH_WITH_RUNTIME AND HH_WITH_RECOMPILED)
     list(APPEND HH_SOURCES src/callbacks.cpp src/renderer.cpp src/sections.cpp
                            src/libultra_stubs.cpp src/testdrive.cpp src/audiodiag.cpp
                            src/resample.cpp src/si_pak.cpp src/controller_pak.cpp src/thread_sampler.cpp src/spin_yield.cpp
-                           src/inspector.cpp src/mods.cpp src/dlcensus.cpp)
+                           src/inspector.cpp src/mods.cpp src/dlcensus.cpp src/hudrewrite.cpp)
     if(HH_WITH_FRONTEND)
         list(APPEND HH_SOURCES src/frontend.cpp)
     endif()

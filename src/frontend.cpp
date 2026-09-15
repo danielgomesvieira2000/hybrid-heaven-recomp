@@ -16,6 +16,7 @@
 #include "hh/frontend.h"
 #include "hh/callbacks.h"
 #include "hh/dlcensus.h"
+#include "hh/hudrewrite.h"
 #include "hh/inspector.h"
 
 #include <chrono>
@@ -104,8 +105,17 @@ public:
     float get_resolution_scale() const override { return inner_->get_resolution_scale(); }
 
     void send_dl(const OSTask* task) override {
-        if (hh::dlcensus::overscan_fix_enabled()) {
-            hh::dlcensus::snap_overscan(rdram_, static_cast<uint32_t>(task->t.data_ptr));
+        hh::dlcensus::per_frame(rdram_, static_cast<uint32_t>(task->t.data_ptr));
+        // HUD classes, live (include/hh/hudrewrite.h): submit a rewritten copy
+        // while any element has a class other than centre.
+        if (const uint32_t rewritten = hh::hudrewrite::rewrite(rdram_, static_cast<uint32_t>(task->t.data_ptr))) {
+            OSTask copy = *task;
+            copy.t.data_ptr = rewritten;
+            if (hh::dlcensus::wanted()) {
+                hh::dlcensus::run(rdram_, static_cast<uint32_t>(task->t.data_ptr));
+            }
+            inner_->send_dl(&copy);
+            return;
         }
         if (hh::dlcensus::wanted()) {
             hh::dlcensus::run(rdram_, static_cast<uint32_t>(task->t.data_ptr));
