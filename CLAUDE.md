@@ -35,19 +35,27 @@ and the switch that re-derives it; keep negative results; mark inference as infe
 
 - No decompilation exists; symbols come from splat run from scratch.
 - 94% of the code is LZKN64-compressed in the Nisitenma-Ichigo file table (`tools/nisitenma.py`);
-  91 code files load at fixed, often shared, addresses through `func_8000469C`.
+  92 code files load at fixed, often shared, addresses through `func_8000469C`.
+- The screen is drawn inside an overscan scissor; the port draws it full frame for widescreen, and
+  anchors HUD elements by rewriting display lists (`src/dlcensus.cpp`, `src/hudrewrite.cpp`).
+  HUD identities must carry content (`include/hh/hudid.h`): addresses are reused across scenes.
 - Controller Pak saves + Rumble Pak, 2 players, optional Expansion Pak (reads `osMemSize`).
 
 ## Build
 
 | Directory | What |
 |---|---|
-| `build/` | Windows, clang-cl + Ninja, RelWithDebInfo (Debug breaks audio timing) — not created yet (phase 00) |
+| `build/` | Windows, clang-cl + Ninja, RelWithDebInfo (Debug breaks audio timing), runtime + recompiled + frontend ON |
 | `build-linux/` | Linux / WSL (`tools/build_linux.sh`) |
 | `lib/N64ModernRuntime/N64Recomp/build-linux/` | N64Recomp + RSPRecomp, built under WSL (`tools/wsl_build_recompiler.sh`) |
 
 Regenerate after a submodule or config change: `python tools/patch_all.py`, then
-`wsl -d Ubuntu -- bash tools/recompile.sh`, then rebuild.
+`wsl -d Ubuntu -e bash tools/recompile.sh` (a toml change) or `tools/regenerate.sh` (the whole
+dump → ELF → C chain, after `python tools/unpack_rom.py rom.z64`), then rebuild. Packaging and
+releases: `docs/BUILDING.md` §8–9.
+
+Test runs: keep settings out of the player's folder, and if a run creates `build/portable.txt`,
+delete it and everything it produced afterwards.
 
 ## Environment variables
 
