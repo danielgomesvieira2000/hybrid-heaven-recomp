@@ -1,0 +1,11 @@
+# Title -> NEW GAME -> GAME START and every pak prompt, one A each 5 s.
+# Record 54-110 s with tools/capture_frames.py (docs/findings/phase-05.md, saves).
+# <start s> <end s> <buttons> [stick_x stick_y] [# note]
+55.0 55.3 START   # title: PRESS START BUTTON -> main menu
+61.0 61.3 START   # NEW GAME -> GAME START / DIFFICULTY / EXIT
+66.0 66.3 A       # GAME START
+71.0 71.3 A       # prompts
+76.0 76.3 A
+81.0 81.3 A
+86.0 86.3 A
+91.0 91.3 A

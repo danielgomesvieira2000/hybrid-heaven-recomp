@@ -224,6 +224,22 @@ on: `osMotorInit` (`func_80027D04`: bank `0xFE` must not read back, `0x80` must)
 `func_80031FF0` (`0xFE` must not read back, `0x84` must) and the Controller Pak checks. After each
 accepted `osMotorInit` it stops the motor (block `0x600`, `00`).
 
+The slot classifier `func_80002BE0(channel)` returns 2 (no pak), 7 (Rumble Pak, set at `0x80002C58`),
+`0xF` (Transfer Pak) or the Controller Pak state 0–5. A Rumble Pak answer skips the Controller Pak.
+Motor use is a separate flag, `D_80037780[channel]`, set by `func_80002A94` when its `osMotorInit`
+succeeds and checked by the start/stop wrapper `func_80002B44`.
+
+Prompt flow (phase 05):
+- blank pak: "Please connect Controller Pak…" → "Creating a game note for Hybrid Heaven in the 1P
+  Controller Pak." → "Please connect a Rumble Pak now if you wish to use it." → cinematic;
+- pak holding the note: GAME START goes straight to the cinematic;
+- slot classified as a Rumble Pak: "Rumble Pak is connected to 1P controller." → "Start game without
+  being able to save?";
+- CONTINUE with a new, unplayed note: DATA LOAD → "No play data exists to be loaded." → "Cancel data
+  load?".
+
+The main menu cursor moves with the stick; a 0.2 s D-pad press did not move it.
+
 The save is one note: game code `NHVE`, publisher `0x4134`, named "HYBRID HEAVEN", **53 pages**
 starting at page 5. A new game creates it when A dismisses the Controller Pak prompt: new inode
 chain, note entry, first data page (phase 05).

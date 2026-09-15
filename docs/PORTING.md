@@ -144,6 +144,12 @@ any bank `>= 0x80`, as a Rumble Pak does. Answering `0x00` after `0xFE` alone al
 but it lets `osGbpakInit`'s `0x84` probe read back, so the slot also reports a Transfer Pak
 (findings/phase-05.md).
 
+**Symptom: with a save on the pak, a new game says "Rumble Pak is connected to 1P controller", then
+"Start game without being able to save?".** The game's slot classifier (`func_80002BE0`) lets a
+successful `osMotorInit` override the Controller Pak. Serving both on one slot needs the game patch
+at `0x80002C58` (`recomp/hybrid-heaven.us.toml`); the motor is still enabled by the game's own
+`func_80002A94`. A/B switch: `HH_NO_RUMBLE_PAK=1`.
+
 **Direct calls stay lookups.** With `use_lookup_for_all_function_calls`, even calls to runtime-owned
 libultra are `LOOKUP_FUNC(address)`, so a function registered at a cartridge address after the
 runtime table (`HH_TRACE_AI`'s wrapper) intercepts every game call to it.

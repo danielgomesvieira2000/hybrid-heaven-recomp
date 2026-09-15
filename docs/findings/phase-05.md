@@ -86,6 +86,69 @@ No lookup miss; the 19 code-file loads as before (file 24's heap copy reported).
 **Open:** `rumble port=0 on` in a scene that shakes (battle), and whether the Rumble Pak prompt text
 changes now that one is detected.
 
+### Run 5: the regression the second change caused
+
+`tools/scripts/continue.txt` (first version: D-pad down for 0.2 s, which did **not** move the menu
+cursor, so START chose NEW GAME), the pak holding the save note, frames 54–110 s:
+
+| t (s) | Screen |
+|---|---|
+| 68–72 | "Please connect Controller Pak to Controller 1 now. Do not remove Controller Pak." |
+| 75 | **"Rumble Pak is connected to 1P controller."** |
+| 79 | **"Start game without being able to save? ▸Yes / No"** |
+| 82–86 | "Starting game without being able to save." |
+| 90 | "Please connect a Rumble Pak now if you wish to use it." |
+
+The pak file was unchanged.
+
+### Run 6 (A/B): the same path with `HH_NO_RUMBLE_PAK=1`
+
+`tools/scripts/newgame-prompts.txt`: GAME START goes **straight into the opening cinematic**, with no
+prompt at all. The game found its note and used it. So the prompts and "without being able to
+save" in run 5 were caused by the Rumble Pak answer. (A stick-down version of `continue.txt`, also
+with `HH_NO_RUMBLE_PAK=1`, reached DATA LOAD: "No play data exists to be loaded.", then "Cancel data
+load?", back to the title.)
+
+### Why: the game's slot classifier
+
+`func_80002BE0(channel)`, called from file 8 (`0x80107D10…`, `0x8013F238`, `0x80142360`):
+
+```
+code = 0
+if (func_80032FB0(pak) == 2) code = 2          /* Controller Pak check: no pak */
+if (osMotorInit(...) == 0)   code = 7          /* 0x80002C58: Rumble Pak      */
+if (osGbpakInit(...) == 0)   code = 0xF        /* Transfer Pak                */
+if (code == 0) code = map(func_80032FB0(pak))  /* Controller Pak states 0-5   */
+return code
+```
+
+A successful motor probe makes the answer 7 and skips the Controller Pak classification. On hardware
+the two cannot both succeed. The motor is enabled elsewhere: `func_80002A94(channel)` calls
+`osMotorInit` itself and sets `D_80037780[channel] = 1`. The Rumble Pak prompt's handler calls it
+with channel 0 (`0x8013ECB4`), and `func_80002B44` (motor start/stop) checks that flag.
+
+### Third change: a game patch, not a pak answer
+
+`recomp/hybrid-heaven.us.toml` replaces `addiu $v1, $zero, 0x7` at `0x80002C58` with a nop. The
+classifier then gives its Controller Pak answer while the pak answers stay as in the second change.
+
+### Run 7 (patched, rumble on, save note present, `newgame-prompts.txt`)
+
+Frame for frame the same as run 6: GAME START → opening cinematic, no prompts, pak unchanged.
+
+### Run 8 (patched, rumble on, **blank pak**)
+
+| t (s) | Screen / trace |
+|---|---|
+| 68–72 | "Please connect Controller Pak to Controller 1 now." |
+| 75 | **"Creating a game note for Hybrid Heaven in the 1P Controller Pak."** A 53-page NHVE note is written |
+| 79–82 | "Please connect a Rumble Pak now if you wish to use it." |
+| 81 | A: `osMotorInit` probe accepted (`FE`→`80`, `80`→`80`), motor stop written: `func_80002A94` enabled the motor |
+| 86– | opening cinematic |
+
+The saved pak was restored from a copy afterwards. **Open:** a motor *start* in play; "Rumble Pak is
+connected" no longer appears, because that text follows classifier answer 7.
+
 ## Saves
 
 **Wrong at first:** from the phase-04 trace on a blank pak I concluded the game creates no note in a

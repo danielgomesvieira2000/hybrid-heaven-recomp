@@ -74,3 +74,17 @@ text = "{ void hh_yield_in_spin(uint8_t* rdram); hh_yield_in_spin(rdram); }"
 func = "func_8001FD14_20914"
 vram = 0x8001FD8C
 value = 0x00E3082A # sltu $at, $a3, $v1 -> slt $at, $a3, $v1
+
+# The game's accessory classifier, func_80002BE0(channel), runs the Controller
+# Pak check, then osMotorInit, then osGbpakInit, and a successful motor probe
+# sets the answer to 7 ("Rumble Pak") so the Controller Pak is never classified.
+# On hardware the slot holds one accessory. This port serves both on one slot
+# (docs/PLAN.md D6, src/si_pak.cpp), and with the answer 7 a new game said "Rumble
+# Pak is connected" and then "Start game without being able to save?"
+# (docs/findings/phase-05.md). Dropping the assignment leaves the classifier's
+# Controller Pak answer. The motor is still enabled where the game enables it,
+# by func_80002A94's own osMotorInit call.
+[[patches.instruction]]
+func = "func_80002BE0_37E0"
+vram = 0x80002C58
+value = 0x00000000 # addiu $v1, $zero, 0x7 -> nop

@@ -1,0 +1,12 @@
+# Title -> CONTINUE, on a pak that holds a save (Hybrid Heaven (USA)).
+# Record 54-110 s with tools/capture_frames.py to see each screen.
+# <start s> <end s> <buttons> [stick_x stick_y] [# note]
+55.0 55.3 START   # title: PRESS START BUTTON -> main menu (NEW GAME highlighted)
+58.0 58.4 - 0 -70  # stick down: cursor to CONTINUE (DDOWN for 0.2 s did not move it)
+61.0 61.3 START   # choose CONTINUE
+66.0 66.3 A       # confirm / advance
+71.0 71.3 A
+76.0 76.3 A
+81.0 81.3 A
+86.0 86.3 A
+91.0 91.3 A
