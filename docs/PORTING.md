@@ -116,7 +116,7 @@ context for frontend-less builds), `src/audiodiag.cpp`, `src/resample.cpp`, `src
 |---|---|
 | `src/sections.cpp` | section tables; runtime-provided libultra at cartridge addresses (`RecompiledFuncs/runtime_funcs.inl`); **the `file_load` wrapper**, which announces each code file (by overlay id, evicting overlapping ones) before the game decompresses it; the failed-lookup report |
 | `src/libultra_stubs.cpp` | `__d_to_ll`, `__d_to_ull`, `__f_to_ull`, `__ll_to_d` |
-| `src/si_pak.cpp`, `src/controller_pak.cpp` | Controller Pak at the joybus + 32 KiB store in `controller_pak_1.pak` (Rayman 2) |
+| `src/si_pak.cpp`, `src/controller_pak.cpp` | Controller Pak at the joybus + 32 KiB store in `controller_pak_1.pak` (Rayman 2), plus a Rumble Pak on the same slot (D6): identify register reads `0x80` after a bank `>= 0x80`, motor writes at block `0x600` → `hh::set_pak_rumble` |
 | `src/spin_yield.cpp` | `hh_yield_in_spin`, called from TOML hooks in busy-waits (Rayman 2) |
 | `src/thread_sampler.cpp` | `HH_SAMPLE=1` (Rayman 2) |
 
@@ -136,6 +136,13 @@ Found with `HH_FRAME_STATS` (the rate) and `HH_SAMPLE` (the main thread executin
 **Symptom: `microcode DMA from RDRAM 0x00F00000... runs past the 8 MB` on every audio task.** The
 private command-list copy must sit below 8 MB on the runtime fork (it bounds RSP DMAs). It is at
 `0x807F0000`.
+
+**Symptom: no rumble; the trace shows `write block=0x400 FEFEFEFE` then `read FEFEFEFE`.** A plain
+echo in the accessory identify register makes libultra's `osMotorInit` decide the device is a
+Controller Pak. Beetle Adventure Racing's one-slot echo is not enough for 2.0I. Answer `0x80` after
+any bank `>= 0x80`, as a Rumble Pak does. Answering `0x00` after `0xFE` alone also passes the motor probe,
+but it lets `osGbpakInit`'s `0x84` probe read back, so the slot also reports a Transfer Pak
+(findings/phase-05.md).
 
 **Direct calls stay lookups.** With `use_lookup_for_all_function_calls`, even calls to runtime-owned
 libultra are `LOOKUP_FUNC(address)`, so a function registered at a cartridge address after the
@@ -199,7 +206,8 @@ Prefix `HH_`.
 | `HH_AUDIO_DUMP=1` | WAV of exactly what is handed to SDL |
 | `HH_AUDIO_HEADROOM_MS`, `HH_AUDIO_PERIOD`, `HH_AUDIO_NO_RESAMPLE` | audio output knobs |
 | `HH_TRACE_AI=1` | the first 12 `osAiSetNextBuffer` calls |
-| `HH_PAKTRACE=1` | every Controller Pak status/read/write on the joybus |
+| `HH_PAKTRACE=1` | every Controller Pak status/read/write on the joybus, and each motor on/off |
+| `HH_NO_RUMBLE_PAK=1` | the slot is a Controller Pak only (Rayman 2's plain identify echo; `osMotorInit` fails) |
 | `HH_SAMPLE=1` | thread sampler report every 2 s (perturbs timing; locate with it, do not measure behaviour) |
 | `HH_YIELD_MS=<0-100>` | spin-yield wait, default 1 |
 | `HH_SKIP_DL=1` | do not hand display lists to RT64 (bisect renderer faults) |

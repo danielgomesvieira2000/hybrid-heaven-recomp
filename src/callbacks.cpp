@@ -343,9 +343,10 @@ bool get_input(int controller_num, uint16_t* buttons, float* x, float* y) {
 #endif
 }
 
-// The runtime's rumble callback. Hybrid Heaven drives its Rumble Pak through the
-// joybus (src/si_pak.cpp serves the motor register beside the Controller Pak,
-// docs/PLAN.md D6), so this is reached only through the runtime's own osMotor path.
+// The runtime's rumble callback, and the port's. Hybrid Heaven drives its Rumble
+// Pak through the joybus: src/si_pak.cpp serves the motor register beside the
+// Controller Pak (docs/PLAN.md D6) and calls hh::set_pak_rumble, on the game
+// thread that issued the SI transfer.
 void set_rumble(int controller_num, bool rumble) {
 #if HH_WITH_FRONTEND
     recompinput::set_rumble(controller_num, rumble);
@@ -1204,6 +1205,10 @@ void set_audio_volume(double percent) {
                  clamped == 0 ? " -- the game will be silent until the Sound tab's"
                                 " Main Volume is raised" : "");
     std::fflush(stderr);
+}
+
+void set_pak_rumble(int port, bool on) {
+    set_rumble(port, on);
 }
 
 ultramodern::input::callbacks_t input_callbacks() {

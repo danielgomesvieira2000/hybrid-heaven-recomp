@@ -33,6 +33,9 @@ void set_mute_when_unfocused(bool mute);
 
 void shutdown_platform();
 
+// The Rumble Pak motor, as src/si_pak.cpp sees the game switch it on the joybus.
+void set_pak_rumble(int port, bool on);
+
 // The game window's width over its height, or 4:3 before there is a window.
 float window_aspect();
 

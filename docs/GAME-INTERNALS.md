@@ -219,7 +219,13 @@ Controller Pak, confirmed on the joybus (`HH_PAKTRACE`). After GAME START the ga
    note table (blocks `0x18–0x27`);
 5. writes the inode backup (blocks `0x10–0x17`) with the same contents several times.
 
-The Rumble Pak is offered at a separate prompt.
+The Rumble Pak is offered at a separate prompt. The game probes the slot repeatedly, from the logos
+on: `osMotorInit` (`func_80027D04`: bank `0xFE` must not read back, `0x80` must), `osGbpakInit`-shaped
+`func_80031FF0` (`0xFE` must not read back, `0x84` must) and the Controller Pak checks. After each
+accepted `osMotorInit` it stops the motor (block `0x600`, `00`).
+
+The save is one note of game code `NHVE`, publisher `0x4134`, named "HYBRID HEAVEN", starting at
+page 5 with a chain through most of the pak (phase 05; when it is created is being traced).
 
 ## Leads from cheat databases (unverified)
 

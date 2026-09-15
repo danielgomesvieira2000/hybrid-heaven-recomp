@@ -17,8 +17,11 @@
 // the seam the port wants, because the SI is where a Controller Pak actually
 // lives.
 //
-// The wire format was read out of this ROM rather than assumed, because the two
-// commands the game uses are packed in two different shapes:
+// The wire format was read out of Rayman 2's ROM rather than assumed (the
+// function addresses below are Rayman 2's), because the two commands a game uses
+// are packed in two different shapes. Hybrid Heaven's libultra packs them the
+// same way: its pak read and write are func_80034060 and func_80033E10, and
+// HH_PAKTRACE shows every frame recognised (docs/findings/phase-04.md).
 //
 //   The status query (func_8000A790) writes a SHORT block with no leading dummy
 //   byte -- txsize at 0, rxsize at 1, cmd at 2 -- and its reply is three bytes
@@ -43,6 +46,7 @@
 #include "recomp.h"
 #include "ultramodern/ultramodern.hpp"
 
+#include "hh/callbacks.h"
 #include "hh/controller_pak.h"
 
 namespace {
@@ -63,6 +67,11 @@ constexpr unsigned kContCardOn     = 0x01;
 // select register, which behaves as memory: whatever is written there reads
 // back, which is exactly what libultra's __osPfsSelectBank expects.
 constexpr int kBlockDetect = 0x400;
+// Block 0x600 (address 0xC000) is the Rumble Pak's motor: 32 bytes of 0x01 start
+// it, 32 bytes of 0x00 stop it (libultra's __osMakeMotorData).
+constexpr int kBlockMotor = 0x600;
+// What a Rumble Pak's identify register reads as.
+constexpr uint8_t kRumbleIdentify = 0x80;
 
 uint8_t g_detect_cell[4][hh::pak::kBlockSize] = {};
 
@@ -71,7 +80,16 @@ bool trace_enabled() {
     return on;
 }
 
-// __osContDataCrc, matching func_800117B8 in this ROM instruction for
+// HH_NO_RUMBLE_PAK=1: present a Controller Pak alone, as Rayman 2 does.
+bool rumble_pak_enabled() {
+    static const bool on = [] {
+        const char* v = std::getenv("HH_NO_RUMBLE_PAK");
+        return v == nullptr || *v == '\0' || *v == '0';
+    }();
+    return on;
+}
+
+// __osContDataCrc, matching func_80034360 in this ROM instruction for
 // instruction: a bitwise CRC over 33 iterations, the last of which shifts in
 // nothing. The game compares its own result against the byte returned here on
 // both reads and writes, and calls the transfer failed if they differ, so this
@@ -111,15 +129,27 @@ void handle_pak_block(uint8_t* rdram, int64_t base, int port, unsigned cmd) {
         std::memset(data, 0, sizeof(data));
     }
 
+    // One slot serves both accessories (docs/PLAN.md D6, after Beetle Adventure
+    // Racing): Controller Pak data below 0x8000, the identify/bank register at
+    // 0x8000, the motor at 0xC000. They collide only in the identify register.
     if (block == kBlockDetect) {
-        // Identify / bank select. libultra writes a byte here and reads it back
-        // to decide the pak is present and to choose a bank; a cell that simply
-        // remembers what it was given satisfies both.
+        // Identify / bank select. The Controller Pak's bank select writes a small
+        // bank number here and reads it back; a cell that remembers what it was
+        // given satisfies it. The accessory probes write values with bit 7 set:
+        //   osMotorInit (func_80027D04): 0xFE must NOT read back, 0x80 must;
+        //   osGbpakInit (func_80031FF0): 0xFE must not read back, 0x84 must.
+        // A Rumble Pak answers 0x80 to every read of this register, which passes
+        // the first and fails the second, so the slot is a Rumble Pak and not a
+        // Transfer Pak. The Controller Pak code never selects a bank >= 0x80.
         if (is_write) {
             std::memcpy(g_detect_cell[port], data, sizeof(data));
         }
         else {
             std::memcpy(data, g_detect_cell[port], sizeof(data));
+            if (rumble_pak_enabled() && hh::pak::present(port) &&
+                g_detect_cell[port][hh::pak::kBlockSize - 1] >= kRumbleIdentify) {
+                std::memset(data, kRumbleIdentify, sizeof(data));
+            }
         }
     }
     else if (block < kBlockDetect) {
@@ -130,10 +160,15 @@ void handle_pak_block(uint8_t* rdram, int64_t base, int port, unsigned cmd) {
             hh::pak::read_block(port, block, data);
         }
     }
-    // Anything above the identify register is unmapped on a Controller Pak --
-    // 0xC000 is the Rumble Pak's motor, and this port presents a Controller Pak
-    // rather than both. A read of it returns zeroes, which is what a slot with
-    // no motor in it gives.
+    else if (block == kBlockMotor && is_write && rumble_pak_enabled() && hh::pak::present(port)) {
+        const bool on = data[0] != 0;
+        hh::set_pak_rumble(port, on);
+        if (trace_enabled()) {
+            std::fprintf(stderr, "[hh] rumble port=%d %s\n", port, on ? "on" : "off");
+        }
+    }
+    // Anything else above the identify register is unmapped. A read of it
+    // returns zeroes, which is what a slot with nothing there gives.
 
     if (!is_write) {
         for (int i = 0; i < hh::pak::kBlockSize; i++) {
