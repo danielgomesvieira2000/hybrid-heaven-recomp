@@ -109,7 +109,7 @@ Measured in [findings/phase-00.md](findings/phase-00.md) (`tools/identify_rom.py
 | D7 | Expansion Pak (reported `osMemSize`) | 8 MB (librecomp default; game offers hi-res modes) / 4 MB (standard modes only) | **measure both in phase 04**, keep 8 MB unless hi-res or the extra memory breaks something; RT64 upscales regardless | **8 MB kept** (phase 04: both sizes load the same files and run clean; 4 MB only skips the "Expansion Pak Enhanced" screen). `HH_EXPANSION_PAK=0` stays as a test switch; the hi-res mode is examined at phase 07 | measurement (phase 04); Daniel may override |
 | D8 | Identity | — | slug / repo / exe `hybrid-heaven-recomp`; env prefix `HH_`; CMake `HH_WITH_*`; settings `%LOCALAPPDATA%\hybrid-heaven-recomp` (Linux `$XDG_DATA_HOME/hybrid-heaven-recomp`) | series rule |
 | D9 | Player count | 1 / 1–2 | **1–2** with WR64/BAR `auto_assign_controllers` patch; keyboard always player 1 | series rule, after phase 01 confirms 2P in code |
-| D10 | Public GitHub repo | — | `gh repo create danielgomesvieira2000/hybrid-heaven-recomp --public` | deferred: a public repo is outward-facing and Daniel did not explicitly ask for it; stays local until he does (phase 09 at the latest) |
+| D10 | Public GitHub repo | — | `gh repo create danielgomesvieira2000/hybrid-heaven-recomp --public` | **Daniel (2026-09-15)**: "I would like to push and commit to a new github repo: hybrid-heaven-recomp". Created public, `main` pushed; no release yet |
 | D11 | Widescreen / HUD mechanism | MIPS patches against our own names / display-list rewriter (WR64 mechanism, fresh measurements) | **display-list rewriting at submission** (Wave Race's mechanism, written fresh for F3DEX2 and this game's measurements): the overscan scissor alone has at least 12 emitters (resident code, file 8, overlays), while one pass over each submitted list sees them all. First use: `HH_FULL_FRAME` (findings/phase-07.md). Instruction patches stay for game logic (the pak classifier) | measurement (phase 07), autonomous session; Daniel may override |
 
 ## Phases
@@ -339,4 +339,4 @@ A build Daniel confirms is a checkpoint: record it before the next experiment.
 
 | Date | Commit | Submodule pins | What Daniel confirmed |
 |---|---|---|---|
-| | | | |
+| 2026-09-15 | `07f2a1b` | N64ModernRuntime `b0b2b6e`, RT64 `5473732`, RecompFrontend `b1a1477` | "So far everything works well." Said after the widescreen default and before the repo was created. The phase 05/06 checklist items were not individually reported |
