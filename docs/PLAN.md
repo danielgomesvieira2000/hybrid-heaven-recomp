@@ -18,6 +18,9 @@ session runs autonomously: at each choice the recommended option is taken and lo
 >   measurable without him is done ([findings/phase-05.md](findings/phase-05.md)). Phase 06 (frontend)
 >   starts before that gate so the playtest uses the real launcher and settings. The phase 05 checks
 >   stay open and are asked for together with phase 06's. (Autonomous session, 2026-09-15.)
+> - *Phase 07 entered before phase 06's gate*, for the same reason. Its measurements and the
+>   full-frame fix need no one; the HUD work needs Daniel at the F1 inspector
+>   ([findings/phase-07.md](findings/phase-07.md)).
 
 ## Goal
 
@@ -107,7 +110,7 @@ Measured in [findings/phase-00.md](findings/phase-00.md) (`tools/identify_rom.py
 | D8 | Identity | — | slug / repo / exe `hybrid-heaven-recomp`; env prefix `HH_`; CMake `HH_WITH_*`; settings `%LOCALAPPDATA%\hybrid-heaven-recomp` (Linux `$XDG_DATA_HOME/hybrid-heaven-recomp`) | series rule |
 | D9 | Player count | 1 / 1–2 | **1–2** with WR64/BAR `auto_assign_controllers` patch; keyboard always player 1 | series rule, after phase 01 confirms 2P in code |
 | D10 | Public GitHub repo | — | `gh repo create danielgomesvieira2000/hybrid-heaven-recomp --public` | deferred: a public repo is outward-facing and Daniel did not explicitly ask for it; stays local until he does (phase 09 at the latest) |
-| D11 | Widescreen / HUD mechanism | MIPS patches against our own names / display-list rewriter (WR64 mechanism, fresh measurements) | decide at phase 07 entry, from what phases 04–06 learn about the draw code | phase 07 |
+| D11 | Widescreen / HUD mechanism | MIPS patches against our own names / display-list rewriter (WR64 mechanism, fresh measurements) | **display-list rewriting at submission** (Wave Race's mechanism, written fresh for F3DEX2 and this game's measurements): the overscan scissor alone has at least 12 emitters (resident code, file 8, overlays), while one pass over each submitted list sees them all. First use: `HH_FULL_FRAME` (findings/phase-07.md). Instruction patches stay for game logic (the pak classifier) | measurement (phase 07), autonomous session; Daniel may override |
 
 ## Phases
 

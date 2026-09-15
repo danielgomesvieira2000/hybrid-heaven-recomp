@@ -186,8 +186,24 @@ A 16-iteration and a 262,144-iteration counted delay loop also exist (`0x8001F8E
 
 ## Rendering
 
-Not yet measured. The game has its own letterbox mode and, with an Expansion Pak, "High
-Normal" / "High Letterbox" modes (~640×480) (reviews; not measured).
+Measured in phase 07 with `HH_DL_CENSUS` (findings/phase-07.md). F3DEX2, one top-level list per
+frame at `0x800692B0`.
+
+| Mode | Colour image | Depth | Scene scissor | Viewport |
+|---|---|---|---|---|
+| low-res (title, menus, cinematics and exploration with default settings) | `0x800CE9C0` (the file table's "reserved" id 2), 320×240 | `0x8038F800` (id 5) | 16,8..304,232 | full, `D_800433A0` |
+| hi-res (KCEO logo and the Expansion Pak screen at boot) | `0x80400000`, 640×480 | `0x80700000` | 32,16..608,464 | full, `D_800433B0` |
+| hi-res, second mode | 640×480 | — | 32,90..608,390 (letterbox) | inset 288×216, `D_800433C0` |
+
+Each frame clears the depth buffer (`0xFFFC`) and the colour image with full-frame fill rectangles,
+then draws the scene inside the scissor. The scissor is an overscan inset (90% × 93%). The camera
+functions `func_80007BD0`, `func_800080D4`, `func_800085A0`, `func_80008A0C` and `func_80008E60`
+store it in the camera structure (`+0x2C`, four shorts) along with the viewport. The mode is picked by
+`func_80130290` (hi-res) and `func_801302CC` (second mode) in file 8.
+
+Projection: one `guPerspective`-shaped load per view, aspect **1.3333**, vertical FOV 30° (title),
+33.3° (a cinematic) or 35° (logos), near 5, far 1800.5–2003.1. Which settings select the modes (the
+main menu's RESOLUTION entry) is not measured yet.
 
 ## Audio
 

@@ -1135,8 +1135,26 @@ ultramodern::renderer::WindowHandle create_window(ultramodern::gfx_callbacks_t::
     flags |= SDL_WINDOW_VULKAN;
 #endif
 
+    // HH_WINDOW_SIZE=WxH: a windowed test run at that size, whatever the settings
+    // say. Presentation and widening differ only in a window that is not 4:3, and
+    // a test should not have to change the player's saved window mode to get one
+    // (Beetle Adventure Racing's BAR_WINDOW_SIZE).
+    int forced_w = 0;
+    int forced_h = 0;
+    if (const char* size = std::getenv("HH_WINDOW_SIZE")) {
+        if (std::sscanf(size, "%dx%d", &forced_w, &forced_h) != 2 || forced_w < 160 || forced_h < 120) {
+            forced_w = forced_h = 0;
+        }
+    }
+
     SDL_Rect display{};
-    if (fullscreen && SDL_GetDisplayBounds(0, &display) == 0) {
+    if (forced_w > 0) {
+        width = forced_w;
+        height = forced_h;
+        std::fprintf(stderr, "[hh] window %dx%d (HH_WINDOW_SIZE)\n", width, height);
+        std::fflush(stderr);
+    }
+    else if (fullscreen && SDL_GetDisplayBounds(0, &display) == 0) {
         width = display.w;
         height = display.h;
         flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;

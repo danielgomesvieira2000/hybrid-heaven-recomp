@@ -195,6 +195,27 @@ is no longer a first run.
 
 ## Widescreen
 
+Mechanism (D11): the frontend's render context passes every display list through
+`src/dlcensus.cpp` before RT64 sees it. That is Wave Race's place for a rewriter, with F3DEX2 decoding
+and this game's measurements.
+
+**Symptom: pillarboxed at 16:9 with aspect Expand, and thin black borders even at 4:3.** Every view
+draws inside an overscan scissor: 16,8..304,232 at 320×240, 32,16..608,464 at 640×480. The 3D
+viewport is already full frame. `HH_FULL_FRAME=1` rewrites exactly those scissors to the full frame,
+and RT64 then widens the picture to the window (findings/phase-07.md). The switch is off until signed
+off. The hi-res letterbox (32,90..608,390) is left alone.
+
+**F3DEX2 is not Fast3D.** `G_MOVEWORD` carries its index in bits 16–23 and its offset in the low 16
+bits (the game emits `0xDB060018` for segment 6). A texture rectangle is followed by `G_RDPHALF_1`
+(0xE1) and `G_RDPHALF_2` (0xF1). `G_MTX` stores its parameters XOR `G_MTX_PUSH`. Nothing exists
+between 0x07 and 0xD3, so a walker that reaches such a byte has left the list.
+
+| Variable | Effect |
+|---|---|
+| `HH_FULL_FRAME=1` | overscan scissors drawn full frame |
+| `HH_DL_CENSUS=<n>` | every n-th list: colour images, viewports, scissors, projections, triangles, rectangles (read-only) |
+| `HH_WINDOW_SIZE=WxH` | windowed test run at that size |
+
 ## Frame interpolation
 
 ## Submodule patches

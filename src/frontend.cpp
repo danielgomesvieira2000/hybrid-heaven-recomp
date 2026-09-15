@@ -15,6 +15,7 @@
 
 #include "hh/frontend.h"
 #include "hh/callbacks.h"
+#include "hh/dlcensus.h"
 #include "hh/inspector.h"
 
 #include <chrono>
@@ -22,6 +23,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <functional>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -71,6 +73,51 @@ std::filesystem::path controls_config_path() {
 
 ultramodern::renderer::PresentationMode presentation_mode();
 
+// Sits between ultramodern and RecompFrontend's renderer so every display list
+// can be looked at before RT64 sees it (HH_DL_CENSUS, include/hh/dlcensus.h).
+// Everything is forwarded untouched. Wave Race 64's RewritingContext has the
+// same shape; phase 07 decides whether this port rewrites lists too (D11).
+class CensusContext final : public ultramodern::renderer::RendererContext {
+public:
+    CensusContext(uint8_t* rdram, std::unique_ptr<ultramodern::renderer::RendererContext> inner)
+        : rdram_(rdram), inner_(std::move(inner)) {
+        setup_result = inner_->get_setup_result();
+        chosen_api = inner_->get_chosen_api();
+    }
+
+    bool valid() override { return inner_->valid(); }
+    ultramodern::renderer::SetupResult get_setup_result() const override {
+        return inner_->get_setup_result();
+    }
+    ultramodern::renderer::GraphicsApi get_chosen_api() const override {
+        return inner_->get_chosen_api();
+    }
+    bool update_config(const ultramodern::renderer::GraphicsConfig& old_config,
+                       const ultramodern::renderer::GraphicsConfig& new_config) override {
+        return inner_->update_config(old_config, new_config);
+    }
+    void enable_instant_present() override { inner_->enable_instant_present(); }
+    void send_dummy_workload(uint32_t fb_address) override { inner_->send_dummy_workload(fb_address); }
+    void update_screen() override { inner_->update_screen(); }
+    void shutdown() override { inner_->shutdown(); }
+    uint32_t get_display_framerate() const override { return inner_->get_display_framerate(); }
+    float get_resolution_scale() const override { return inner_->get_resolution_scale(); }
+
+    void send_dl(const OSTask* task) override {
+        if (hh::dlcensus::overscan_fix_enabled()) {
+            hh::dlcensus::snap_overscan(rdram_, static_cast<uint32_t>(task->t.data_ptr));
+        }
+        if (hh::dlcensus::wanted()) {
+            hh::dlcensus::run(rdram_, static_cast<uint32_t>(task->t.data_ptr));
+        }
+        inner_->send_dl(task);
+    }
+
+private:
+    uint8_t* rdram_;
+    std::unique_ptr<ultramodern::renderer::RendererContext> inner_;
+};
+
 // RecompFrontend's renderer draws the game and the menus into the same command
 // list, so it replaces a renderer of the port's own rather than sitting beside
 // it.
@@ -90,8 +137,9 @@ std::unique_ptr<ultramodern::renderer::RendererContext> create_render_context(
     // is a null check per frame.
     (void)developer_mode;
     hh::inspector::install();
-    return recompui::renderer::create_render_context(
-        rdram, window_handle, presentation_mode(), true);
+    return std::make_unique<CensusContext>(
+        rdram, recompui::renderer::create_render_context(
+                   rdram, window_handle, presentation_mode(), true));
 }
 
 // Which frame RT64 puts on screen, and when.
