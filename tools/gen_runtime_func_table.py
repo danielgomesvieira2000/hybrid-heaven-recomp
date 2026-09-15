@@ -51,7 +51,11 @@ def defined_recomp_functions():
     sources += list((REPO / "src").glob("*.cpp"))
 
     names = set()
-    pattern = re.compile(r"\bvoid\s+(\w+)_recomp\s*\(\s*uint8_t\s*\*")
+    # Both spellings occur in librecomp: `(uint8_t* rdram, ...)` and
+    # `(RDRAM_ARG recomp_context* ctx)` (pi.cpp's osPiStartDma, among others).
+    # Missing the second leaves those functions unregistered, so the first call
+    # to one is a lookup miss.
+    pattern = re.compile(r"\bvoid\s+(\w+)_recomp\s*\(\s*(?:uint8_t\s*\*|RDRAM_ARG\b)")
     for path in sources:
         names.update(pattern.findall(path.read_text(errors="replace")))
     return names

@@ -20,6 +20,16 @@
 
 // ---- hand-verified ------------------------------------------------------------
 
+// Game functions the port binds to by name (not libultra).
+//
+// The Nisitenma-Ichigo loader: rejects id 0 and ids >= 0x271, reads the ROM offset
+// table at 0x80038FE0 (bit 31 = compressed) and the vram table at 0x80037C5C,
+// decompresses (0x80003824) or copies (0x80001FE8) into dest. src/sections.cpp
+// wraps it to announce each code file to librecomp.
+file_load = 0x8000469C; // type:func
+// LZKN64 decompressor (docs/GAME-INTERNALS.md has the command set).
+lzkn64_decompress = 0x80003824; // type:func
+
 // Entry stub: clears bss 0x8004DBD0 +0x80DC0, sets $sp, `jr $t2` to 0x80001078.
 entrypoint = 0x80000400; // type:func size:0x38
 

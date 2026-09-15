@@ -272,6 +272,9 @@ set(HH_SOURCES src/main.cpp src/rom.cpp src/crash_handler.cpp)
 # The harness only makes sense with both the runtime and the generated code.
 # Each phase adds its sources here (docs/PLAN.md).
 if(HH_WITH_RUNTIME AND HH_WITH_RECOMPILED)
+    list(APPEND HH_SOURCES src/callbacks.cpp src/renderer.cpp src/sections.cpp
+                           src/libultra_stubs.cpp src/testdrive.cpp src/audiodiag.cpp
+                           src/resample.cpp src/si_pak.cpp src/controller_pak.cpp)
     if(HH_WITH_FRONTEND)
         list(APPEND HH_SOURCES src/frontend.cpp)
     endif()

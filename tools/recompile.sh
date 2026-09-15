@@ -41,6 +41,9 @@ mkdir -p RecompiledFuncs/context
 echo "=== declarations for runtime-provided libultra ==="
 python3 tools/gen_reimplemented_decls.py
 
+echo "=== runtime-provided libultra at cartridge addresses ==="
+python3 tools/gen_runtime_func_table.py
+
 echo "=== RSPRecomp: the audio microcode ==="
 "$BIN/RSPRecomp" recomp/aspMain.us.toml
 
