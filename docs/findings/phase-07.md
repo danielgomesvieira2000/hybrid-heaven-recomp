@@ -12,7 +12,7 @@ stretch, menus and a boss fight right at 16:9, 21:9 and 4:3.
 |---|---|
 | `HH_WINDOW_SIZE=WxH` | a windowed run at that size, whatever the saved settings say (BAR's knob) |
 | `HH_DL_CENSUS=<n>` (`src/dlcensus.cpp`) | every n-th top-level display list: colour images, viewports, scissors, projections (aspect, fovy, near/far), triangle counts, fill and texture rectangles. Read-only |
-| `HH_FULL_FRAME=1` | overscan scissors rewritten to the full frame (below). Off by default until signed off |
+| `HH_FULL_FRAME` | overscan scissors rewritten to the full frame (below). Introduced off; on by default since Daniel's request (end of this file), `=0` turns it off |
 | `portable.txt` in `build/` | test runs keep settings, dump copy and pak beside the exe, away from the player's folder; removed after the runs |
 
 ## Run 1: a 16:9 window changes nothing
@@ -88,4 +88,8 @@ every third of a second cannot show it. RT64's free camera (F1) settles it (play
   Daniel driving the inspector.
 - The hi-res letterbox mode (32,90..608,390) and the RESOLUTION menu entry.
 - 21:9 and 4:3 windows; the Expansion Pak screen's own inset viewport (288×216).
-- Deciding whether `HH_FULL_FRAME` becomes the default (standing constraint: after sign-off).
+- ~~Deciding whether `HH_FULL_FRAME` becomes the default~~ Decided by Daniel (2026-09-15: "The
+  current build does not have the widescreen applied. do that now please."). The full-frame scissor
+  is now on by default and `HH_FULL_FRAME=0` turns it off. Verified with no switch set: a 1280×720
+  window shows the picture edge to edge, and the log reads
+  `HH_FULL_FRAME: overscan scissors are drawn full frame` then `... 1 snapped`.

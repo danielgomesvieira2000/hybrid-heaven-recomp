@@ -24,7 +24,7 @@ bool wanted();
 // Walks the list at `list_address` (a KSEG0 or physical address) in `rdram`.
 void run(const uint8_t* rdram, uint32_t list_address);
 
-// HH_FULL_FRAME=1 (phase 07, off until signed off): every G_SETSCISSOR equal to
+// On by default; HH_FULL_FRAME=0 turns it off (phase 07). Every G_SETSCISSOR equal to
 // the game's overscan inset -- 16,8..304,232 at 320x240, 32,16..608,464 at
 // 640x480 -- is rewritten in place to the full frame, so the picture reaches the
 // window's edges and RT64 treats the frame as one it can widen. Other scissors

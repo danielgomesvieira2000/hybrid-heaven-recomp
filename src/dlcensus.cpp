@@ -254,12 +254,13 @@ uint64_t g_lists = 0;
 
 bool overscan_fix_enabled() {
     static const bool on = [] {
+        // On by default (Daniel, 2026-09-15). HH_FULL_FRAME=0 restores the
+        // game's own overscan inset for an A/B.
         const char* v = std::getenv("HH_FULL_FRAME");
-        const bool enabled = v != nullptr && *v != '\0' && *v != '0';
-        if (enabled) {
-            std::fprintf(stderr, "[hh] HH_FULL_FRAME: overscan scissors are drawn full frame\n");
-            std::fflush(stderr);
-        }
+        const bool enabled = !(v != nullptr && *v == '0');
+        std::fprintf(stderr, "[hh] HH_FULL_FRAME: overscan scissors are %s\n",
+                     enabled ? "drawn full frame" : "left as the game sets them (HH_FULL_FRAME=0)");
+        std::fflush(stderr);
         return enabled;
     }();
     return on;
