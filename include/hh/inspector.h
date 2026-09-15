@@ -61,9 +61,20 @@ void end_frame();
 // next frame and can be undone without restarting.
 bool override_class(const char* identity, int* out_class);
 
-// Whether any identity has a class set (panel or hud.json). Lock-free; the
-// rewriter checks it before copying anything.
+// Whether any identity has a class set (panel or hud.json). Lock-free.
 bool any_overrides();
+
+// The class compiled into the port for this identity (tools/promote_hud_tags.py
+// fills the table), or kAuto.
+int builtin_class(const char* identity);
+
+// The class an element is drawn with: the panel's or hud.json's override if
+// there is one, else the built-in class.
+int class_for(const char* identity);
+
+// Whether anything is classified at all, built in or overridden. The rewriter
+// checks it before copying anything.
+bool any_classes();
 
 // ---- the panel's side, on the renderer's UI thread --------------------------
 

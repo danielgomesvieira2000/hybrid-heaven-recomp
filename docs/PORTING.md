@@ -226,6 +226,14 @@ element has a class (dropdown, or `hud.json` in the settings folder, loaded at s
 `src/hudrewrite.cpp` copies the frame's lists to `0x807A0000` / `0x807C8000` and inserts RT64's
 extended GBI around the classified draws. The change shows on the next frame.
 
+**Promoting tags.** `python tools/promote_hud_tags.py --clear` merges the local `hud.json` into
+`load_defaults()` in `src/inspector.cpp` (between markers; additive, idempotent) and empties the
+file. Rebuild, then commit. Precedence, highest first: the panel's dropdown, `hud.json`, the built-in
+table. First promotion (2026-09-15, Daniel's tags): the radar's three pieces (`tex:0x802866f8`,
+`tex:0x80286af8`, `dl:0x80181860`) left; `dl:0x03000f10`, `dl:0x030002e0` and `fill:0x00000000`
+right. *Caution:* a `fill:` identity is only a colour, so `fill:0x00000000` anchors **every** black fill
+rectangle. At boot the rewriter already applies it to one draw that is not the dialogue box.
+
 **Symptom: part of a HUD widget moves and part stays.** One of its lists is reached by a `G_DL`
 branch rather than a call (the radar dial, `dl:0x80181860`). A branch never returns, so the class is
 applied from the branch to the inlined list's end command.

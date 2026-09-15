@@ -41,9 +41,7 @@ std::string hex_id(const char* kind, uint32_t value) {
 }
 
 int class_of(const std::string& identity) {
-    int cls = hh::inspector::kAuto;
-    hh::inspector::override_class(identity.c_str(), &cls);
-    return cls;
+    return hh::inspector::class_for(identity.c_str());
 }
 
 // HH_HUD_REWRITE_TRACE=1: each identity the rewriter sees, once, with its class
@@ -369,7 +367,7 @@ uint32_t rewrite(uint8_t* rdram, uint32_t list_address) {
         const char* v = std::getenv("HH_NO_HUD_REWRITE");
         return v != nullptr && *v != '\0' && *v != '0';
     }();
-    if (off || !hh::inspector::any_overrides()) return 0;
+    if (off || !hh::inspector::any_classes()) return 0;
 
     g_turn ^= 1;
     Writer w{ rdram, kScratch[g_turn], kScratchSize };

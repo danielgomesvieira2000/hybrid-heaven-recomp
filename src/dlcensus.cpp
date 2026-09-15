@@ -431,8 +431,9 @@ void per_frame(uint8_t* rdram, uint32_t list_address) {
     if (hud) {
         hh::inspector::begin_frame(0);   // no game-state variable identified yet
         for (const auto& e : c.elements) {
-            int given = hh::inspector::kAuto;
-            hh::inspector::override_class(e.identity.c_str(), &given);
+            // "As classified" in the panel is the built-in class; the panel
+            // shows an override on top of it itself.
+            const int given = hh::inspector::builtin_class(e.identity.c_str());
             hh::inspector::note_element(e.identity.c_str(), e.second.c_str(), e.x0, e.x1, e.y0, e.y1,
                                         false, given, e.rect);
         }

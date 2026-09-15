@@ -477,4 +477,47 @@ bool override_class(const char* identity, int* out_class) {
     return true;
 }
 
+namespace {
+
+// The built-in classes: tags made in the panel and promoted into the code by
+// tools/promote_hud_tags.py, so every build and release carries them. The local
+// hud.json and the panel's dropdown both override an entry here.
+void load_defaults(std::unordered_map<std::string, int>& by_identity) {
+    // ---- promoted from hud.json by tools/promote_hud_tags.py ----
+    by_identity["dl:0x030002e0"]   = kRight;
+    by_identity["dl:0x03000f10"]   = kRight;
+    by_identity["dl:0x80181860"]   = kLeft;
+    by_identity["fill:0x00000000"] = kRight;
+    by_identity["tex:0x802866f8"]  = kLeft;
+    by_identity["tex:0x80286af8"]  = kLeft;
+    // ---- end promoted ----
+}
+
+const std::unordered_map<std::string, int>& builtin() {
+    static const std::unordered_map<std::string, int> table = [] {
+        std::unordered_map<std::string, int> by_identity;
+        load_defaults(by_identity);
+        return by_identity;
+    }();
+    return table;
+}
+
+}  // namespace
+
+int builtin_class(const char* identity) {
+    if (identity == nullptr) return kAuto;
+    const auto it = builtin().find(identity);
+    return it == builtin().end() ? kAuto : it->second;
+}
+
+int class_for(const char* identity) {
+    int cls = builtin_class(identity);
+    override_class(identity, &cls);
+    return cls;
+}
+
+bool any_classes() {
+    return g_enabled && (g_any_overrides.load(std::memory_order_relaxed) || !builtin().empty());
+}
+
 }  // namespace hh::inspector
