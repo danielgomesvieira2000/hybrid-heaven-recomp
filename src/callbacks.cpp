@@ -901,14 +901,17 @@ void bisect_audio_task(uint8_t* rdram, uint32_t ucode_addr) {
     std::fflush(stderr);
 }
 
-// Where the private copy of the command list lives: 0x80F00000, in extended
-// RDRAM. Not in the top of the game's 8 MB, as Wave Race 64's port put it:
-// Hybrid Heaven reads osMemSize and, with 8 MB reported, uses memory up to
-// 0x80796000 (file ids 6 and 3, docs/GAME-INTERNALS.md). The runtime's own
-// structures start at 0x80800000 (PI handles, then patches from 0x80801000) and
-// mods load from 0x81000000, so the megabyte below that is free for the port.
-// Pilotwings 64 chose it for the same reason.
-constexpr uint32_t kCommandListScratch = 0x80F00000u;
+// Where the private copy of the command list lives: 0x807F0000, the top 64 KB of
+// the 8 MB the runtime reports.
+//
+// Not 0x80F00000, where Pilotwings 64: Recompiled put it: the runtime fork this
+// port uses bounds every RSP DMA to the 8 MB an N64 has (Rayman 2's fix, fork
+// commit fdfd82e), so a command list above 8 MB is read as nothing and every
+// audio task fails ("microcode DMA ... runs past the 8 MB", first boot of phase
+// 04). Below 8 MB, the game's own reservations end at 0x80796000 (file ids 6 and
+// 3, docs/GAME-INTERNALS.md). *Inferred* free above that: nothing in the file
+// table claims it; re-check if the game's hi-res mode or a heap reaches it.
+constexpr uint32_t kCommandListScratch = 0x807F0000u;
 constexpr uint32_t kCommandListScratchSize = 0x10000u;
 
 RspExitReason asp_main_watched(uint8_t* rdram, uint32_t ucode_addr) {

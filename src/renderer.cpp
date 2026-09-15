@@ -15,7 +15,9 @@
 
 #include "hh/renderer.h"
 
+#include <atomic>
 #include <cstdio>
+#include <cstdlib>
 
 #if defined(_WIN32)
 // RT64 reaches dxcapi.h from here, and that header needs the COM interfaces
@@ -190,6 +192,9 @@ void RT64Context::enable_instant_present() {
     // boots, so it is deferred rather than guessed at.
 }
 
+// Display lists submitted; update_screen reports the rate under HH_FRAME_STATS.
+static std::atomic<uint64_t> dl_count{ 0 };
+
 void RT64Context::send_dl(const OSTask* task) {
     if (!valid_) {
         return;
@@ -198,7 +203,6 @@ void RT64Context::send_dl(const OSTask* task) {
     // Boot bring-up tracing: the first display list is the moment the game
     // stops initialising and starts drawing, which is the single most useful
     // event to see during phase 04. Counted, not printed every frame.
-    static uint64_t dl_count = 0;
     if (dl_count == 0) {
         std::fprintf(stderr, "[hh] first display list: ucode 0x%08X data 0x%08X dl 0x%08X\n",
                      task->t.ucode, task->t.ucode_data, task->t.data_ptr);
@@ -248,6 +252,17 @@ void RT64Context::update_screen() {
             std::fprintf(stderr, "[hh] update_screen #%llu\n",
                          static_cast<unsigned long long>(frames));
             std::fflush(stderr);
+        }
+        // HH_FRAME_STATS=1: display lists per 60 screen updates, which separates
+        // "the game stopped drawing" from "the game draws an empty screen".
+        static const bool stats = std::getenv("HH_FRAME_STATS") != nullptr;
+        if (stats && frames % 60 == 0) {
+            static uint64_t last = 0;
+            const uint64_t now = dl_count.load();
+            std::fprintf(stderr, "[hh] t=%llus display lists in the last 60 updates: %llu\n",
+                         static_cast<unsigned long long>(frames / 60),
+                         static_cast<unsigned long long>(now - last));
+            last = now;
         }
         ++frames;
         app_->updateScreen();

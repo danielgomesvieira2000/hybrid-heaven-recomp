@@ -78,6 +78,15 @@ osContStartReadData = 0x800283B0; // type:func
 // Walks __osContPifRam for __osMaxControllers (0x800CBFC1) pads into the caller's
 // OSContPad array (the game passes 0x8005CE50, 4 pads x 6 bytes). osContGetReadData.
 osContGetReadData = 0x80028434; // type:func
+// libultra 2.0I osEPiStartDma exactly: -1 unless the PI manager is active (0x8004AB10);
+// mb->piHandle = handle; mb->hdr.type = 0xF (EDOMREAD) / 0x10 (EDOMWRITE); jam on
+// high priority, else send, to osPiGetCmdQueue(). Every ROM read of the file loader
+// goes through it (func_80001F30: OSIoMesg at 0x8005CD80, reply queue 0x8005C268).
+// Unnamed in the first boot, the game's copy posted to a PI manager queue nothing
+// reads -- the runtime owns osCreatePiManager -- and every game thread parked in
+// osRecvMesg after file 8 (docs/findings/phase-04.md; Rayman 2 hit the same with
+// osPiStartDma). Reimplemented by librecomp.
+osEPiStartDma = 0x800304F0; // type:func
 // PI access; handle base 0xB0000000; bzero(transferInfo, 0x60); reads and restores
 // PI_BSD_DOM1 LAT/PWD/PGS/RLS (0xA4600014-20) around a ROM header read; links the
 // handle into the PI table under __osDisableInt. osCartRomInit (reimplemented).

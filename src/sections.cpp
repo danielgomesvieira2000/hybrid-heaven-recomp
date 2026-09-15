@@ -114,9 +114,17 @@ void announce_load(uint32_t id, uint32_t dest) {
     g_loaded_at[index] = file.vram;
 
     static const bool trace = env_set("HH_DEBUG_LOADS");
-    if (trace) {
-        std::fprintf(stderr, "[hh-load] file %3u -> 0x%08X (0x%06X bytes, %zu evicted)\n",
-                     id, file.vram, file.size, evicted);
+    if (trace || dest != file.vram) {
+        // The last addresses this thread resolved before the loader: the caller
+        // chain, in game addresses ($ra is not maintained by recompiled code).
+        recomp::overlays::LookupHistoryEntry history[recomp::overlays::lookup_history_capacity];
+        const size_t n = recomp::overlays::get_lookup_history(history, recomp::overlays::lookup_history_capacity);
+        std::fprintf(stderr, "[hh-load] file %3u -> 0x%08X (0x%06X bytes, %zu evicted) after",
+                     id, dest, file.size, evicted);
+        for (size_t i = n > 6 ? n - 6 : 0; i < n; ++i) {
+            std::fprintf(stderr, " %08X", history[i].address);
+        }
+        std::fprintf(stderr, "\n");
         std::fflush(stderr);
     }
 }
@@ -128,6 +136,20 @@ void file_load_hook(uint8_t* rdram, recomp_context* ctx) {
     const uint32_t dest = static_cast<uint32_t>(ctx->r5);
     announce_load(id, dest);
     file_load(rdram, ctx);
+}
+
+// HH_TRACE_AI=1: the buffer address and size the game hands osAiSetNextBuffer,
+// for the first 12 calls.
+extern "C" void osAiSetNextBuffer_recomp(uint8_t* rdram, recomp_context* ctx);
+constexpr uint32_t kAiSetNextBufferAddress = 0x80034F70;
+void ai_set_next_buffer_trace(uint8_t* rdram, recomp_context* ctx) {
+    static int calls = 0;
+    if (++calls <= 12) {
+        std::fprintf(stderr, "[hh-ai] osAiSetNextBuffer(0x%016llX, 0x%llX)\n",
+                     static_cast<unsigned long long>(ctx->r4), static_cast<unsigned long long>(ctx->r5));
+        std::fflush(stderr);
+    }
+    osAiSetNextBuffer_recomp(rdram, ctx);
 }
 
 // librecomp's own miss path prints one line, then asserts and std::exits on the
@@ -205,6 +227,9 @@ void register_runtime_functions() {
 
     // Last, so nothing above overwrites it.
     recomp::overlays::add_loaded_function(static_cast<int32_t>(kFileLoadAddress), file_load_hook);
+    if (env_set("HH_TRACE_AI")) {
+        recomp::overlays::add_loaded_function(static_cast<int32_t>(kAiSetNextBufferAddress), ai_set_next_buffer_trace);
+    }
 
     std::fprintf(stderr, "[hh] registered %zu runtime-provided functions; file loader wrapped at 0x%08X\n",
                  sizeof(runtime_provided_funcs) / sizeof(runtime_provided_funcs[0]), kFileLoadAddress);

@@ -47,3 +47,30 @@ stubs = [
 
 ignored = [
 ]
+
+# The audio manager's frame size (func_8001FD14, the __amHandleFrameMsg pattern of
+# Nintendo's audio manager sample) is target + 0x100 - osAiGetLength()/4, masked
+# to 16, then raised to the minimum with `sltu $at, $a3, $v1`. On hardware
+# osAiGetLength never exceeds a frame, so the difference never goes negative. Here
+# the host queue may hold more (the runtime keeps a few VIs in hand), the
+# difference goes negative, the unsigned compare lets it past the clamp, and
+# osAiSetNextBuffer receives -0x1000 bytes: the first boot of phase 04 crashed
+# reading past RDRAM in queue_samples. A signed compare clamps it to the minimum.
+# Goemon64Recomp (klorfmorf, GPL-3.0) documents and patches the same instruction in
+# Mystical Ninja Starring Goemon's copy of this code; re-derived here from our own
+# disassembly and HH_TRACE_AI (docs/findings/phase-04.md).
+# The main loop's frame limiter polls osGetTime until enough time has passed
+# (0x80001A88-0x80001B18) and never yields, which under ultramodern's
+# cooperative scheduler starves every other game thread (phase 04: screen
+# updates stopped ~30 s in). The hook runs before the loop's first instruction,
+# the branch target of both back edges, so it runs once per iteration.
+# src/spin_yield.cpp.
+[[patches.hook]]
+func = "func_80001454_2054"
+before_vram = 0x80001A88
+text = "{ void hh_yield_in_spin(uint8_t* rdram); hh_yield_in_spin(rdram); }"
+
+[[patches.instruction]]
+func = "func_8001FD14_20914"
+vram = 0x8001FD8C
+value = 0x00E3082A # sltu $at, $a3, $v1 -> slt $at, $a3, $v1
