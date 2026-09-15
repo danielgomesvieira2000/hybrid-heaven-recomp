@@ -6,7 +6,7 @@ here, add a note under *Departures* rather than rewriting the text. Findings go 
 [findings/](findings). Reference facts go in [PORTING.md](PORTING.md) (port) and
 [GAME-INTERNALS.md](GAME-INTERNALS.md) (game).
 
-**Status:** phases 00-04 done 2026-09-15; phase 05 and phase 06 done up to the checks only Daniel can make (findings/phase-05.md, phase-06.md). Plan approved by Daniel 2026-09-15 ("looks good, continue autonomously"). The
+**Status:** phases 00-07 done 2026-09-15 (05-07 confirmed by Daniel's playtest after 0.1.0, see Verified checkpoints); phase 08 (high frame rate) next. Plan approved by Daniel 2026-09-15 ("looks good, continue autonomously"). The
 session runs autonomously: at each choice the recommended option is taken and logged below.
 
 > **Departures from this plan** (added as they happen):
@@ -340,3 +340,4 @@ A build Daniel confirms is a checkpoint: record it before the next experiment.
 | Date | Commit | Submodule pins | What Daniel confirmed |
 |---|---|---|---|
 | 2026-09-15 | `07f2a1b` | N64ModernRuntime `b0b2b6e`, RT64 `5473732`, RecompFrontend `b1a1477` | "So far everything works well." Said after the widescreen default and before the repo was created. The phase 05/06 checklist items were not individually reported |
+| 2026-09-15 | `77f8ca3` (v0.1.0) and later HUD commits | same | **Phase 05:** "saving and rumble works perfectly during my playtest, so do setting changes". **Phase 06:** "has been tested and confirmed". **Phase 07:** "has been tested in multiple aspect ratios, it works properly". Not part of the report: audio pitch against ares (no reference emulator installed) |

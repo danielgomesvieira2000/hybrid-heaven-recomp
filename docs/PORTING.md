@@ -8,7 +8,7 @@ game are in [GAME-INTERNALS.md](GAME-INTERNALS.md). How each fact was found is i
 Each section states the **symptom first**, because a symptom is what you will have when
 you come looking.
 
-**Status:** phase 04 done: boots through logos, title, menus, pak prompts and the opening cinematic into exploration, controllable with the stick; no lookup miss in 15 minutes. Phase 05 (correctness) measured up to Daniel's checks. Phase 06: the launcher, settings, 1-2 players and F1 build and run; Daniel's checks pending. Sections below are filled as phases land.
+**Status:** phase 04 done: boots through logos, title, menus, pak prompts and the opening cinematic into exploration, controllable with the stick; no lookup miss in 15 minutes. Phases 05 (saves, rumble, settings), 06 (frontend) and 07 (widescreen in several aspect ratios) confirmed by Daniel's playtest; 0.1.0 released for Windows and Linux. Phase 08 (high frame rate) next. Sections below are filled as phases land.
 
 Pinned upstream revisions ([PLAN.md](PLAN.md) D5). RT64 and RecompFrontend, including every
 nested submodule, are identical to Wave Race 64: Recompiled 1.0.2's pins (compared with

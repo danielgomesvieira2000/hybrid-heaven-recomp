@@ -2,9 +2,11 @@
 
 The working record, wrong turns included; not rewritten later.
 
-**Gate:** not met. Entered before phase 06's gate (Daniel's checks), with D11 decided from the
-measurements below (docs/PLAN.md departures). The exit is Daniel's: every screen of the phase-05
-stretch, menus and a boss fight right at 16:9, 21:9 and 4:3.
+**Gate:** met. Daniel, 2026-09-15: "Phase 07 has been tested in multiple aspect ratios, it works
+properly." The phase was entered before phase 06's gate, with D11 decided from the measurements below
+(docs/PLAN.md departures). The planned exit was every screen of the phase-05 stretch, menus and a boss
+fight right at 16:9, 21:9 and 4:3. Still open as follow-ups rather than gate items: more HUD tags as
+new screens are played, and the hi-res letterbox mode.
 
 ## Tools added
 

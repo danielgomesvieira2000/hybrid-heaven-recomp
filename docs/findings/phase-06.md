@@ -2,9 +2,10 @@
 
 The working record, wrong turns included; not rewritten later.
 
-**Gate:** not met; it is Daniel's (docs/PLAN.md phase 06). He should pick his dump in the launcher,
-play with a pad, then with the keyboard and no pad attached, see settings survive a restart from
-another working directory, and open F1. What could be checked without him is below.
+**Gate:** met. Daniel, 2026-09-15: "Phase 06 has been tested and confirmed." The checks were: pick
+the dump in the launcher, play with a pad, then with the keyboard and no pad attached, see settings
+survive a restart from another working directory, and open F1. What was checked before that, without
+him, is below.
 
 ## What was copied, and from where
 

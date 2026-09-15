@@ -2,9 +2,11 @@
 
 The working record, wrong turns included; not rewritten later.
 
-**Gate:** not met. It needs Daniel: title → New Game → opening cutscene → first battle → save to
-the Controller Pak → quit → relaunch → load → resume, with correct visuals and audio pitch against
-ares, and rumble in battle.
+**Gate:** met on Daniel's playtest (2026-09-15): "saving and rumble works perfectly during my
+playtest, so do setting changes." The one exit item outside that report: audio pitch against ares
+(no reference emulator installed). The plan's exit was title → New Game → opening cutscene → first
+battle → save to the Controller Pak → quit → relaunch → load → resume, with correct visuals and
+audio pitch against ares, and rumble in battle.
 
 ## Rumble Pak on the Controller Pak's slot (D6)
 
