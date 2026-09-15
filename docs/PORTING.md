@@ -229,10 +229,15 @@ extended GBI around the classified draws. The change shows on the next frame.
 **Promoting tags.** `python tools/promote_hud_tags.py --clear` merges the local `hud.json` into
 `load_defaults()` in `src/inspector.cpp` (between markers; additive, idempotent) and empties the
 file. Rebuild, then commit. Precedence, highest first: the panel's dropdown, `hud.json`, the built-in
-table. First promotion (2026-09-15, Daniel's tags): the radar's three pieces (`tex:0x802866f8`,
-`tex:0x80286af8`, `dl:0x80181860`) left; `dl:0x03000f10`, `dl:0x030002e0` and `fill:0x00000000`
-right. *Caution:* a `fill:` identity is only a colour, so `fill:0x00000000` anchors **every** black fill
-rectangle. At boot the rewriter already applies it to one draw that is not the dialogue box.
+table.
+
+**Symptom: tags made in one scene break another (the Expansion Pak screen smears at the left).**
+An address or colour is not an identity here. Segment 3 is remapped per scene, the heap reuses
+texture addresses, and `fill:<colour>` names every rectangle of that colour; the first promoted
+`fill:0x00000000` pinned a black clear to the right edge. Identities carry content
+(`include/hh/hudid.h`): `tex:<addr>#<image hash>`, `dl:<addr>#<list hash>`, `fill:<colour>@<rect>`.
+Full-frame clears are never classifiable. `HH_HUD_ELEMENTS_LOG=1` logs each identity once with its
+extent. Before promoting, A/B scenes other than the one tagged against `HH_NO_HUD_REWRITE=1`.
 
 **Symptom: part of a HUD widget moves and part stays.** One of its lists is reached by a `G_DL`
 branch rather than a call (the radar dial, `dl:0x80181860`). A branch never returns, so the class is

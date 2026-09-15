@@ -138,3 +138,39 @@ session with `build\hybrid-heaven-recomp.exe` kept its settings in `build/`. His
 three radar identities as `left`) was moved to `%LOCALAPPDATA%\hybrid-heaven-recomp\`. The
 `controller_pak_1.pak` in `build/` from that session was deleted during cleanup before this was
 noticed.
+
+### Regression: promoted tags broke other scenes
+
+Daniel: "These changes have broken the ui in other scenese now. Most notable: during the expansion
+pack intro sequence."
+
+Frames 8–34 s at 1280×720, with the built-in table as promoted vs `HH_NO_HUD_REWRITE=1`. With the
+rewrite, the red floor and earlier frames stay on screen at the left of the widened frame, which
+is never cleared. The trace shows one classified draw in that scene: `fill rect fill:0x00000000
+class 2`, the black clear in a 208-byte list, pinned to the right edge. Without the rewrite the
+intro is clean.
+
+**Cause:** the identities were addresses and colours. `fill:<colour>` names every rectangle of that
+colour. `dl:0x03xxxxxx` goes through segment 3, which each scene remaps. `tex:` images at
+`0x8028xxxx` are heap addresses that other scenes reuse. Tags promoted from one scene then apply
+wherever the key recurs (playbook 08: "Positional identities over-match across screens; direct/arena
+addresses are not identities").
+
+**Fix (`include/hh/hudid.h`):**
+- `tex:<address>#<hash of the image's first 64 bytes>`
+- `dl:<address>#<hash of the list's first 16 commands>`
+- `fill:<colour>@ulx,uly,lrx,lry` in 320×240
+- full-frame fills are clears and get no identity.
+
+The feed and the rewriter build them the same way. The six promoted tags cannot match the new
+scheme, so the table was emptied (`promote_hud_tags.py --replace` from an empty file) and they are
+re-derived from an exploration run with `HH_HUD_ELEMENTS_LOG=1`.
+
+**Re-derived** (`HH_HUD_ELEMENTS_LOG=1`, boot to exploration, 9 min): each of the six elements had
+exactly one identity for the whole run. Promoted:
+- left: `tex:0x802866f8#a3036828`, `tex:0x80286af8#dfde6ac5`, `dl:0x80181860#e59a0172` (the radar)
+- right: `dl:0x03000f10#1427da33`, `dl:0x030002e0#bbb8c0ba`, `fill:0x00000000@197,143,277,223`
+
+Check, frames 8–34 s (`HH_HUD_REWRITE_TRACE=1`): no tag fires in the Expansion Pak intro, which
+draws clean. The first classified draws are in exploration, where the radar sits at the window's
+left edge.
