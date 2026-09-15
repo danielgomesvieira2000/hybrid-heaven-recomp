@@ -6,13 +6,18 @@ here, add a note under *Departures* rather than rewriting the text. Findings go 
 [findings/](findings). Reference facts go in [PORTING.md](PORTING.md) (port) and
 [GAME-INTERNALS.md](GAME-INTERNALS.md) (game).
 
-**Status:** phases 00-02 done 2026-09-15. Plan approved by Daniel 2026-09-15 ("looks good, continue autonomously"). The
+**Status:** phases 00-04 done 2026-09-15; phase 05 work done up to the checks only Daniel can make; phase 06 started. Plan approved by Daniel 2026-09-15 ("looks good, continue autonomously"). The
 session runs autonomously: at each choice the recommended option is taken and logged below.
 
 > **Departures from this plan** (added as they happen):
 >
 > - *Phase 01*: the ELF has **93** code segments (resident + 92 files), not 92: file 99 has one
 >   function besides its data. Everything else as planned. ([findings/phase-01.md](findings/phase-01.md))
+> - *Phase 05 → 06 order*: phase 05's exit is a playtest by Daniel (first battle, save, relaunch, load,
+>   rumble, pitch against ares), and no reference emulator is installed here. Everything
+>   measurable without him is done ([findings/phase-05.md](findings/phase-05.md)). Phase 06 (frontend)
+>   starts before that gate so the playtest uses the real launcher and settings. The phase 05 checks
+>   stay open and are asked for together with phase 06's. (Autonomous session, 2026-09-15.)
 
 ## Goal
 
