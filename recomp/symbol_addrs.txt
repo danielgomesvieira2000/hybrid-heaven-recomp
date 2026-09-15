@@ -1,0 +1,3 @@
+// Hand-verified and matched symbol names for splat (name = 0xVRAM; type:func size:0x..).
+// Entry stub: 0x38 bytes, ends jr $t2 to 0x80001078.
+entrypoint = 0x80000400; // type:func size:0x38
