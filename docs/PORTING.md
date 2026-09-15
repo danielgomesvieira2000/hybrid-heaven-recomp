@@ -8,7 +8,7 @@ game are in [GAME-INTERNALS.md](GAME-INTERNALS.md). How each fact was found is i
 Each section states the **symptom first**, because a symptom is what you will have when
 you come looking.
 
-**Status:** phase 04 done: boots through logos, title, menus, pak prompts and the opening cinematic into exploration, controllable with the stick; no lookup miss in 15 minutes. Phase 05 (correctness) in progress. Sections below are filled as phases land.
+**Status:** phase 04 done: boots through logos, title, menus, pak prompts and the opening cinematic into exploration, controllable with the stick; no lookup miss in 15 minutes. Phase 05 (correctness) measured up to Daniel's checks. Phase 06: the launcher, settings, 1-2 players and F1 build and run; Daniel's checks pending. Sections below are filled as phases land.
 
 Pinned upstream revisions ([PLAN.md](PLAN.md) D5). RT64 and RecompFrontend, including every
 nested submodule, are identical to Wave Race 64: Recompiled 1.0.2's pins (compared with
@@ -33,11 +33,12 @@ verify with `git submodule status`.
 2. [The ELF](#the-elf)
 3. [Recompiling](#recompiling)
 4. [The harness](#the-harness)
-5. [Patches](#patches)
-6. [Widescreen](#widescreen)
-7. [Frame interpolation](#frame-interpolation)
-8. [Submodule patches](#submodule-patches)
-9. [Testing and diagnostics](#testing-and-diagnostics)
+5. [The frontend](#the-frontend)
+6. [Patches](#patches)
+7. [Widescreen](#widescreen)
+8. [Frame interpolation](#frame-interpolation)
+9. [Submodule patches](#submodule-patches)
+10. [Testing and diagnostics](#testing-and-diagnostics)
 
 ## The pipeline
 
@@ -153,6 +154,42 @@ at `0x80002C58` (`recomp/hybrid-heaven.us.toml`); the motor is still enabled by 
 **Direct calls stay lookups.** With `use_lookup_for_all_function_calls`, even calls to runtime-owned
 libultra are `LOOKUP_FUNC(address)`, so a function registered at a cartridge address after the
 runtime table (`HH_TRACE_AI`'s wrapper) intercepts every game call to it.
+
+## The frontend
+
+RecompFrontend's launcher, settings, remapping and mods tab, wired as Wave Race 64 does it
+(`src/frontend.cpp`; what came from where is in findings/phase-06.md). `-DHH_WITH_FRONTEND=ON`.
+
+| Piece | Where |
+|---|---|
+| launcher: Start Game / Load ROM, Controls, Settings, Mods, Quit; emblem `assets/icons/Logo.svg` (`tools/make_logo.py`) | `build_launcher` |
+| program id `hybrid-heaven-recomp` = the settings folder `main.cpp` registers | `init` |
+| players 1–2, pads auto-assigned in connection order, keyboard always player 1 | `set_player_count_range(1, 2)`, `refresh_players` in `src/callbacks.cpp` |
+| rumble: the General tab's slider gates recompinput's whole rumble path; the game's Rumble Pak writes reach it via `hh::set_pak_rumble` | `general.has_rumble_strength`, `update_rumble()` per frame |
+| Main Volume and Mute When Not In Focus, applied by the port | Sound tab callbacks |
+| F1: RT64 developer UI forced on, "Hybrid Heaven HUD" panel (no classifier until phase 07) | `create_render_context`, `src/inspector.cpp` |
+| texture-pack mods (`rt64.json` inside a `.nrm`) | `src/mods.cpp` |
+| log to `hh.log` when started without a terminal | `main` |
+
+**Symptom: `ui_api_events.cpp: '../../../../../patches/ui_funcs.h' file not found`.** recompui
+includes a header from the port by a fixed relative path. The port carries `patches/ui_funcs.h`,
+which includes `recompui/event_structs.h`.
+
+**Symptom: the launcher's art covers its own title and menu.** The SVG is laid out at full width and
+centred vertically behind both. Keep the art out of the centre column and the top third.
+
+**First run and test runs.** First run opens fullscreen at the display's size, except when
+`HH_INPUT_SCRIPT` is set. A test run in a clean settings folder creates `graphics.json`,
+`controls.json`, `general.json` and `sound.json`: delete them afterwards, or the next real launch
+is no longer a first run.
+
+| Variable | Effect |
+|---|---|
+| `HH_AUTOSTART=1` | start the stored dump without the launcher (for scripting the shipped configuration) |
+| `HH_PRESENT_MODE=console\|skip\|early` | RT64 presentation mode (default early) |
+| `HH_INSPECTOR=0` | no HUD panel in the F1 menu |
+| `HH_TEST_INSPECTOR=<s>` | press F1 after that many seconds |
+| `HH_TEST_OPEN_SETTINGS=<tab>@<s>` | open the settings menu on a tab |
 
 ## Patches
 

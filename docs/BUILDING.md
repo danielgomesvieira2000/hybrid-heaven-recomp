@@ -88,5 +88,35 @@ build\hybrid-heaven-recomp.exe --identify rom.z64
 Quote every `-D` argument in PowerShell (it splits `3.5` at the dot). Never build Debug:
 it breaks audio timing. Delete `build/` when switching compilers.
 
-Later phases add `-DHH_WITH_RECOMPILED=ON -DHH_WITH_RUNTIME=ON -DHH_WITH_FRONTEND=ON` and the
-ROM → ELF → C steps before this one.
+The game, with the launcher (after steps 4 and 5):
+
+```powershell
+cmake -B build -G Ninja "-DCMAKE_C_COMPILER=clang-cl" "-DCMAKE_CXX_COMPILER=clang-cl" "-DCMAKE_BUILD_TYPE=RelWithDebInfo" "-DCMAKE_POLICY_VERSION_MINIMUM=3.5" "-DHH_WITH_RECOMPILED=ON" "-DHH_WITH_RUNTIME=ON" "-DHH_WITH_FRONTEND=ON"
+cmake --build build --target hybrid-heaven-recomp
+build\hybrid-heaven-recomp.exe            # the launcher: Load ROM, then Start Game
+build\hybrid-heaven-recomp.exe rom.z64    # straight into the game (scripted runs)
+```
+
+The build copies the menu's fonts, stylesheet and icons into `build\assets`. Close a running copy
+before rebuilding. Started without a terminal, the game writes its log to
+`%LOCALAPPDATA%\hybrid-heaven-recomp\hh.log`.
+
+Without `-DHH_WITH_FRONTEND=ON` the executable has no launcher and needs a dump on the command line
+(the phase 03 harness with its own RT64 context).
+
+## 7. Controls
+
+| N64 | Keyboard | Pad |
+|---|---|---|
+| Stick | arrow keys | left stick |
+| A / B | X / C | A (south) / X (west) |
+| Z | Z | left trigger |
+| Start | Enter | Start |
+| L / R | A / S | left shoulder / right trigger |
+| C buttons | I J K L | right stick |
+| D-pad | T F G H | D-pad |
+| Menu | Escape | Back / View |
+
+F1 opens RT64's debug menu and the HUD inspector. Everything is remappable in Controls. Pads are
+assigned to players 1 and 2 in the order they are connected; the keyboard always plays as player 1.
+

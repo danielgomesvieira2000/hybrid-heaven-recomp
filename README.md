@@ -26,7 +26,7 @@ Unofficial, and not affiliated with Konami.
 
 ## Building from source
 
-Not buildable yet; `docs/BUILDING.md` arrives with phase 00.
+See [docs/BUILDING.md](docs/BUILDING.md), which also lists the default controls.
 
 ## Documentation
 

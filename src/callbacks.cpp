@@ -95,6 +95,56 @@ void refresh_primary_controller() {
     }
 }
 
+// Who is player one, and who is player two (from Wave Race 64: Recompiled).
+//
+// The frontend's own answer is a modal: it opens, each player presses a button
+// on the pad they want, and the assignment is committed. Until someone had been
+// through it nothing was assigned at all -- a pad drove the game, because the
+// port read it directly, while rumble did nothing, because rumble goes through
+// the player list.
+//
+// So the pads are assigned here instead, in the order SDL reports them, whenever
+// that set changes: plug one in and it is player one, plug a second in and it is
+// player two. Two is the maximum (src/frontend.cpp). With no pad at all the
+// keyboard becomes player one, so the game is still playable.
+// tools/patch_recompinput.py adds the call; the modal still wins while it is
+// open, for anyone who wants to choose.
+void refresh_players() {
+    std::vector<SDL_GameController*> connected;
+    for (int i = 0; i < SDL_NumJoysticks(); ++i) {
+        if (!SDL_IsGameController(i)) continue;
+        // Opening an already-open device returns the existing handle.
+        if (SDL_GameController* pad = SDL_GameControllerOpen(i)) {
+            connected.push_back(pad);
+        }
+    }
+
+    // The first call always assigns, even with nothing connected. Comparing
+    // against the last set alone broke input entirely on a machine with no pad
+    // attached in Wave Race 64: an empty set matched an empty set, nothing was
+    // ever assigned, and player one -- keyboard included -- did not exist.
+    static bool assigned_once = false;
+    static std::vector<SDL_GameController*> assigned;
+    if (assigned_once && connected == assigned) {
+        return;
+    }
+    assigned_once = true;
+    assigned = connected;
+
+    recompinput::players::auto_assign_controllers(connected.data(), connected.size());
+
+    std::fprintf(stderr, "[hh] player 1 profiles: controller %d, keyboard %d\n",
+                 recompinput::profiles::get_input_profile_for_player(
+                     0, recompinput::InputDevice::Controller),
+                 recompinput::profiles::get_input_profile_for_player(
+                     0, recompinput::InputDevice::Keyboard));
+    std::fprintf(stderr, "[hh] %zu controller%s connected; assigned to %zu player%s\n",
+                 connected.size(), connected.size() == 1 ? "" : "s",
+                 recompinput::players::get_number_of_assigned_players(),
+                 recompinput::players::get_number_of_assigned_players() == 1 ? "" : "s");
+    std::fflush(stderr);
+}
+
 #endif
 
 void poll_input() {
@@ -137,6 +187,7 @@ void poll_input() {
     recompinput::poll_inputs();
 
     refresh_primary_controller();
+    refresh_players();
 #else
     SDL_Event event;
     while (SDL_PollEvent(&event)) {
@@ -217,10 +268,15 @@ bool get_input(int controller_num, uint16_t* buttons, float* x, float* y) {
     // reads SDL buttons itself silently ignores every rebinding. It returns the
     // stick already normalized, which is what the runtime wants (see the note
     // further down).
-    //
-    // Player 1 only until phase 06 brings the frontend's 1-2 player assignment
-    // (docs/PLAN.md D9); get_n64_input merges the keyboard with every pad.
-    if (controller_num != 0) {
+    if (controller_num < 0 || controller_num >= 2) {
+        return false;
+    }
+    // Player one always exists, because a keyboard is always attached: the
+    // assignment gives player one the keyboard profile as well as whatever pad it
+    // has, and get_n64_input merges the two. Player two exists only once a second
+    // pad has been plugged in, or a test script drives it.
+    if (controller_num == 1 && !recompinput::players::get_player_is_assigned(1) &&
+        !hh::input_script_has_player_two()) {
         return false;
     }
 
@@ -367,6 +423,12 @@ ultramodern::input::connected_device_info_t get_connected_device_info(int contro
     // have to agree (playbook 05, "Two halves needed").
     if (controller_num == 0) {
         return { ultramodern::input::Device::Controller, ultramodern::input::Pak::ControllerPak };
+    }
+    // Player two, when there is one: a controller with nothing in its slot. The
+    // game saves only to controller 1's pak (its prompt says so).
+    if (controller_num == 1 && (recompinput::players::get_player_is_assigned(1) ||
+                                hh::input_script_has_player_two())) {
+        return { ultramodern::input::Device::Controller, ultramodern::input::Pak::None };
     }
 #else
     if (controller_num == 0) {
@@ -1169,9 +1231,15 @@ void update_gfx(ultramodern::gfx_callbacks_t::gfx_data_t) {
     g_window_focused.store(focused, std::memory_order_relaxed);
 
 #if HH_WITH_FRONTEND
-    // recompinput ramps and decays the motor; nothing asks for it in this game,
-    // but the call keeps a mod's rumble working and stops a stale pulse.
+    // Alt-tabbed away with Mute When Not In Focus on, the motor stops too.
+    if (!focused && g_mute_unfocused.load(std::memory_order_relaxed)) {
+        recompinput::set_rumble(0, false);
+    }
+    // recompinput ramps and decays the motor towards what the game last asked
+    // for through the Rumble Pak (src/si_pak.cpp); the library never calls this
+    // itself, and without it set_rumble only sets a flag (Wave Race 64).
     recompinput::update_rumble();
+    hh::frontend::maybe_autostart();
 #endif
 }
 
