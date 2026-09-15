@@ -120,3 +120,30 @@ Without `-DHH_WITH_FRONTEND=ON` the executable has no launcher and needs a dump 
 F1 opens RT64's debug menu and the HUD inspector. Everything is remappable in Controls. Pads are
 assigned to players 1 and 2 in the order they are connected; the keyboard always plays as player 1.
 
+
+## 8. Linux
+
+On Debian or Ubuntu (WSL works too):
+
+```sh
+bash tools/setup_linux.sh --install      # packages, the splat venv, submodules
+bash tools/build_linux.sh "/path/to/Hybrid Heaven (USA).z64"
+./build-linux/hybrid-heaven-recomp
+```
+
+The dump is needed on the first build (it unpacks, splits, recompiles) and again only after a
+`recomp/*.toml` change; later rebuilds are `bash tools/build_linux.sh`. Clang only (the newest
+`clang-NN` found, or `HH_CC`/`HH_CXX`); `HH_BUILD_DIR`, `HH_JOBS`. Settings and saves live in
+`${XDG_DATA_HOME:-~/.local/share}/hybrid-heaven-recomp`. The renderer needs a Vulkan driver.
+
+## 9. Packaging a release
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/package_release.ps1 -BuildDir build -Version X.Y.Z
+wsl -d Ubuntu -- python3 tools/package_release.py --version X.Y.Z
+```
+
+Outputs in `dist/`: `hybrid-heaven-recomp-X.Y.Z-windows-x64.zip` (+ `-debug-symbols.zip`) and
+`hybrid-heaven-recomp-X.Y.Z-linux-x86_64.tar.gz` (+ `-debug-symbols.tar.gz`). Both refuse to stage a
+dump or a save (`.pak` included) and copy the license texts listed in
+`tools/third_party_licenses.txt`. The Linux script refuses to overwrite an archive.

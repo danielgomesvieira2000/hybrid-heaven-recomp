@@ -9,7 +9,7 @@ if(CMAKE_HOST_APPLE AND NOT CMAKE_OSX_DEPLOYMENT_TARGET)
 endif()
 
 project(HybridHeavenRecomp
-    VERSION 0.0.1
+    VERSION 0.1.0
     DESCRIPTION "Native PC port of Hybrid Heaven via static recompilation"
     LANGUAGES C CXX)
 

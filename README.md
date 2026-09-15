@@ -1,7 +1,7 @@
 # Hybrid Heaven: Recompiled
 
-> **Status: in development, not playable yet.** The plan and its phases are in
-> [docs/PLAN.md](docs/PLAN.md). There are no releases.
+> **Status: 0.1.0, very early and very untested.** Only the start of the game has been played
+> so far. Please report what breaks.
 
 A native PC port of Hybrid Heaven for Windows and Linux, made by statically
 recompiling the game with [N64Recomp](https://github.com/N64Recomp/N64Recomp).
@@ -10,13 +10,16 @@ Unofficial, and not affiliated with Konami.
 **No game data is included.** You need your own dump of **Hybrid Heaven (USA)**
 (SHA-1 `16dbc21620b52deab5c5abf8a309ac60adfbee85`), as `.z64`, `.n64`, `.v64` or a ZIP. No other version works.
 
-## Features (planned)
+## Features
 
-- Widescreen at your display's aspect ratio, with the HUD at the screen edges
-- High frame rate: smooth motion up to your display's refresh rate, with the game's own timing
+- Widescreen at your window's aspect ratio, with the game's overscan border removed
+- HUD elements anchored to the screen edges (the radar so far)
 - Launcher with graphics, sound and controls settings, remapping and mod support
 - Keyboard and controller support for 1–2 players; controllers are assigned as they are plugged in
-- Controller Pak saves and Rumble Pak support
+- Controller Pak saves, and the Rumble Pak on the same controller without swapping
+- F1 debug menu with a live HUD editor
+
+Planned: high frame rate (smooth motion up to your display's refresh rate, with the game's own timing).
 
 ## Getting started
 
@@ -26,7 +29,16 @@ Unofficial, and not affiliated with Konami.
 
 ## Building from source
 
-See [docs/BUILDING.md](docs/BUILDING.md), which also lists the default controls.
+Linux (Debian/Ubuntu, or WSL):
+
+```sh
+bash tools/setup_linux.sh --install
+bash tools/build_linux.sh "/path/to/Hybrid Heaven (USA).z64"
+./build-linux/hybrid-heaven-recomp
+```
+
+Windows needs Visual Studio Build Tools with clang-cl, CMake, Ninja, Python and WSL (the ELF step);
+the steps are in [docs/BUILDING.md](docs/BUILDING.md), which also lists the default controls.
 
 ## Documentation
 
