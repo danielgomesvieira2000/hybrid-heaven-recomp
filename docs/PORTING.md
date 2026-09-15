@@ -313,7 +313,13 @@ Set variables in the calling shell: `tools/boot_runs.ps1 -Env "A=1","B=1"` passe
   process at the end; the window must be visible for grabs. They photograph the desktop: a covering
   terminal is silently what gets saved (phase 04, run 6). When a picture matters, use
   `python tools/capture_frames.py OUTDIR FROM TO --exe build\hybrid-heaven-recomp.exe --title "Hybrid Heaven: Recompiled" --rom rom.z64 --env HH_INPUT_SCRIPT=<file>`,
-  which reads the window through Windows Graphics Capture.
+  which reads the window through Windows Graphics Capture. Run long captures from Bash: a
+  background PowerShell task closes the child's console (`SDL_QUIT` ~8 min in).
+- **Test in a sandbox:** `python tools/test_sandbox.py --exe build/hybrid-heaven-recomp.exe --rom rom.z64
+  [--capture FROM TO --title "Hybrid Heaven: Recompiled"] [--seconds N] --out <dir> [--env K=V] [--seed <file>]`
+  copies the exe, DLLs and assets to a temp folder with `portable.txt`, runs, keeps the files the run
+  wrote in `<dir>/settings/`, and deletes the folder. The build directory and the player's settings
+  are never written. A `portable.txt` left in `build/` once redirected Daniel's own session there.
 
 ---
 

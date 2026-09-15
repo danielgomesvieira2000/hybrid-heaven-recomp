@@ -54,8 +54,8 @@ Regenerate after a submodule or config change: `python tools/patch_all.py`, then
 dump → ELF → C chain, after `python tools/unpack_rom.py rom.z64`), then rebuild. Packaging and
 releases: `docs/BUILDING.md` §8–9.
 
-Test runs: keep settings out of the player's folder, and if a run creates `build/portable.txt`,
-delete it and everything it produced afterwards.
+Test runs: use `python tools/test_sandbox.py` (a throwaway copy of the build with its own settings,
+deleted afterwards; `--capture FROM TO` records frames). Never leave a `portable.txt` in `build/`.
 
 ## Environment variables
 
