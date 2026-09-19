@@ -1,7 +1,7 @@
 # Hybrid Heaven: Recompiled
 
-> **Status: 0.1.0, very early and very untested.** Only the start of the game has been played
-> so far. Please report what breaks.
+> **Status: 0.2.0, early and still untested.** Only the start of the game has been played so far,
+> up to the first battles. Please report what breaks.
 
 A native PC port of Hybrid Heaven for Windows and Linux, made by statically
 recompiling the game with [N64Recomp](https://github.com/N64Recomp/N64Recomp).

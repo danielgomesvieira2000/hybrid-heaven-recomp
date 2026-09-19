@@ -7,6 +7,16 @@ Versions follow [semantic versioning](https://semver.org) loosely: while the
 project is below 1.0, the minor number moves when something a player would
 notice changes.
 
+## [0.2.0](docs/releases/0.2.0.md) — First battles
+
+- **Fixed: crash at the first enemy encounter.** The game streams the battle code (file 57) in during
+  the encounter cutscene through a second loader (`0x80004838`) the port did not wrap; its functions
+  were never registered and the first call into them was a lookup miss
+  ([issue 001](docs/issues/001-first-enemy-lookup-miss.md); `HH_NO_STREAMED_LOADS=1` reverts).
+- Diagnostics: the lookup-miss report shows the RDRAM words at the target; `HH_MISS_DUMP=<file>`
+  writes all of RDRAM; `HH_DEBUG_LOADS` also traces `lzkn64_decompress`.
+- `tools/test_sandbox.py`: test runs in a throwaway copy of the build.
+
 ## [0.1.0](docs/releases/0.1.0.md) — First release
 
 Very early and very untested: only boot, menus, New Game, the opening cinematic and the first
