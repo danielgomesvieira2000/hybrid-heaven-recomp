@@ -51,6 +51,7 @@ The resident code calls into file 8 at 25 sites (`0x80116E80–0x801521C8`). The
 | Vram table | `0x80037C5C`: 8 bytes per id, `{vram start, vram end}` (end includes bss) |
 | Ids | 1..`0x270`; `func_8000469C` rejects 0 and ≥ `0x271` |
 | Loader | `func_8000469C(id, dest)`: compressed → `func_80003824(rom, dest, size)`, raw → `func_80001FE8`; the rest of the function is not yet read |
+| Streamed loader | `func_80004838(id, dest)`: the same table entry, a piece per call through its own resumable LZKN64 decompressor `func_80003F44` (state at `0x800892B0 + 0x42AD..0x42F8`); returns 0 until complete, then the end address, after zero-filling up to the table end. Called by the load queue (`0x80004530`, `0x800045C0`). Loads file 57 (battle code) at each encounter and file 56 when exploration resumes (issue 001) |
 | Files with data | 547 (482 compressed), ROM `0x4E5F40–0xE705D2` |
 | Code files | 91, `0x368070` bytes decompressed, 15,782 `jr $ra` |
 | Image files | 47 at segment `0x08`, all beginning `PIC` (the game's image codec; strings `PIC: decode overrun`) |
@@ -167,6 +168,11 @@ table addresses:
 | `0x80004484` | `align8(*0x801BBC10)`, an arena pointer |
 | `0x800044BC` | `align8(*0x80089470)`, a bump allocator that starts at `0x801BF1A0` and is advanced to the returned end |
 | `0x800045E8` | `func_8001F290(vram span)`, a heap allocation; afterwards `func_80016EAC(id, dest)` records (id → address) in a table |
+
+Files 56 (exploration, `0x803757E0`) and 57 (battle, `0x80358820`–`0x8038CBC0`) overlap and swap at every
+encounter through the streamed loader: 57 when the encounter cutscene starts, 56 when exploration resumes
+(`HH_DEBUG_LOADS`, Daniel's playtest 2026-09-19, five battles). File 11 calls into file 57 directly
+(`jal 0x80379410` at `0x8022CAA4`, taken when byte `0x8017DD92` is 0).
 
 For code files the allocators hand out the link address in every case seen so far, except file 24's
 second copy through `0x800045E8`, which lands at `0x801FA948` (*inferred:* a data cache; nothing

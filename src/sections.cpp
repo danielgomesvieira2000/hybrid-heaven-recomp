@@ -10,8 +10,10 @@
 // which file occupies which address *now*, because every call is resolved by
 // address (use_lookup_for_all_function_calls) and 28 files share 0x801E1BE0.
 //
-// The lowest point every load passes through is the game's own loader,
-// file_load(id, dest) at 0x8000469C (playbook 04, "announce every load"). It is
+// Loads pass through one of the game's two loaders: file_load(id, dest) at
+// 0x8000469C, which loads a file in one call, and the streamed loader at
+// 0x80004838, which loads it a piece per call (playbook 04, "announce every load";
+// the second was missed until issue 001). Both are
 // wrapped, not replaced: the wrapper updates librecomp's function map, then runs
 // the recompiled original, which decompresses the file into RDRAM as the game
 // expects -- the game reads its data from those bytes, even though its code is
@@ -129,8 +131,47 @@ void announce_load(uint32_t id, uint32_t dest) {
     }
 }
 
+uint8_t* g_rdram = nullptr;  // for the lookup-miss report
+
+// The game's second loader: file_load_streamed(id, dest) at 0x80004838 loads the
+// same file table entry a piece per call (its own resumable LZKN64 decompressor,
+// 0x80003F44, state at 0x800892B0 + 0x42AD..0x42F8), returning 0 until the file
+// is complete and the end address once it is. The load queue (0x80004530,
+// 0x800045C0) streams file 57, the battle code, in this way during the first
+// encounter's cutscene; file_load never sees it (issue 001). The file is
+// announced on the call that completes it: before that its code is not all in
+// RDRAM, and the files it overwrites are still the registered ones.
+constexpr uint32_t kFileLoadStreamedAddress = 0x80004838;
+extern "C" void func_80004838_5438(uint8_t* rdram, recomp_context* ctx);
+void file_load_streamed_hook(uint8_t* rdram, recomp_context* ctx) {
+    const uint32_t id = static_cast<uint32_t>(ctx->r4);
+    const uint32_t dest = static_cast<uint32_t>(ctx->r5);
+    func_80004838_5438(rdram, ctx);
+    if (ctx->r2 != 0) {
+        announce_load(id, dest);
+    }
+}
+
+// HH_DEBUG_LOADS=1 also traces lzkn64_decompress, which file_load uses (the
+// streamed loader has its own decompressor and is not traced here).
+extern "C" void lzkn64_decompress(uint8_t* rdram, recomp_context* ctx);
+constexpr uint32_t kLzknDecompressAddress = 0x80003824;
+void lzkn64_decompress_trace(uint8_t* rdram, recomp_context* ctx) {
+    recomp::overlays::LookupHistoryEntry history[recomp::overlays::lookup_history_capacity];
+    const size_t n = recomp::overlays::get_lookup_history(history, recomp::overlays::lookup_history_capacity);
+    std::fprintf(stderr, "[hh-lzkn] src 0x%08X -> 0x%08X (a2 0x%X) after",
+                 static_cast<uint32_t>(ctx->r4), static_cast<uint32_t>(ctx->r5), static_cast<uint32_t>(ctx->r6));
+    for (size_t i = n > 6 ? n - 6 : 0; i < n; ++i) {
+        std::fprintf(stderr, " %08X", history[i].address);
+    }
+    std::fprintf(stderr, "\n");
+    std::fflush(stderr);
+    lzkn64_decompress(rdram, ctx);
+}
+
 // Wraps the game's file_load: register the file's functions, then load it.
 void file_load_hook(uint8_t* rdram, recomp_context* ctx) {
+    g_rdram = rdram;
     // Arguments are read before calling through: the callee owns the context.
     const uint32_t id = static_cast<uint32_t>(ctx->r4);
     const uint32_t dest = static_cast<uint32_t>(ctx->r5);
@@ -181,6 +222,29 @@ void on_lookup_failure(int32_t addr) {
             }
         }
         std::fprintf(stderr, "\n");
+    }
+    // What the game would execute on hardware: the words in RDRAM at the target
+    // say whether a file the wrapper never saw is there, or the call really lands
+    // in the middle of the loaded file's code. 0x8017DD92 guards file 11's calls
+    // into file 57 (docs/issues/001); 0x801BBC1C is the scene id file 8 switches
+    // overlays on.
+    if (uint8_t* rdram = g_rdram; rdram != nullptr && (addr & 0xFF800000) == 0x80000000) {
+        const int32_t base = addr & ~3;
+        std::fprintf(stderr, "[hh] RDRAM at 0x%08X: %08X %08X %08X %08X\n", static_cast<unsigned>(base),
+                     static_cast<uint32_t>(MEM_W(0, base)), static_cast<uint32_t>(MEM_W(4, base)),
+                     static_cast<uint32_t>(MEM_W(8, base)), static_cast<uint32_t>(MEM_W(12, base)));
+        std::fprintf(stderr, "[hh] D_8017DD92 = %u, scene D_801BBC1C = 0x%04X\n",
+                     static_cast<uint8_t>(MEM_BU(0, static_cast<int32_t>(0x8017DD92))),
+                     static_cast<uint16_t>(MEM_HU(0, static_cast<int32_t>(0x801BBC1C))));
+        // HH_MISS_DUMP=<file>: all 8 MB of RDRAM, as the runtime holds it (32-bit
+        // words in host order), for comparing against the unpacked files.
+        if (const char* path = std::getenv("HH_MISS_DUMP"); path != nullptr && *path != '\0') {
+            if (FILE* f = std::fopen(path, "wb"); f != nullptr) {
+                std::fwrite(rdram, 1, 8 * 1024 * 1024, f);
+                std::fclose(f);
+                std::fprintf(stderr, "[hh] RDRAM written to %s\n", path);
+            }
+        }
     }
     std::fflush(stdout);
     std::fflush(stderr);
@@ -233,6 +297,9 @@ void register_runtime_functions() {
 
     // Last, so nothing above overwrites it.
     recomp::overlays::add_loaded_function(static_cast<int32_t>(kFileLoadAddress), file_load_hook);
+    if (!env_set("HH_NO_STREAMED_LOADS")) {
+        recomp::overlays::add_loaded_function(static_cast<int32_t>(kFileLoadStreamedAddress), file_load_streamed_hook);
+    }
     // HH_EXPANSION_PAK=0: report a 4 MB console. The game asks only through
     // osGetMemSize (0x8002C0B0; main compares the answer with 0x400000), which the
     // runtime answers with 8 MB. For the phase-04 comparison of the two modes
@@ -243,6 +310,9 @@ void register_runtime_functions() {
             recomp::overlays::add_loaded_function(static_cast<int32_t>(kOsGetMemSizeAddress), os_get_mem_size_4mb);
             std::fprintf(stderr, "[hh] HH_EXPANSION_PAK=0: osGetMemSize reports 4 MB\n");
         }
+    }
+    if (env_set("HH_DEBUG_LOADS")) {
+        recomp::overlays::add_loaded_function(static_cast<int32_t>(kLzknDecompressAddress), lzkn64_decompress_trace);
     }
     if (env_set("HH_TRACE_AI")) {
         recomp::overlays::add_loaded_function(static_cast<int32_t>(kAiSetNextBufferAddress), ai_set_next_buffer_trace);

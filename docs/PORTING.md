@@ -115,7 +115,7 @@ context for frontend-less builds), `src/audiodiag.cpp`, `src/resample.cpp`, `src
 
 | File | What |
 |---|---|
-| `src/sections.cpp` | section tables; runtime-provided libultra at cartridge addresses (`RecompiledFuncs/runtime_funcs.inl`); **the `file_load` wrapper**, which announces each code file (by overlay id, evicting overlapping ones) before the game decompresses it; the failed-lookup report |
+| `src/sections.cpp` | section tables; runtime-provided libultra at cartridge addresses (`RecompiledFuncs/runtime_funcs.inl`); **the loader wrappers**: `file_load` (`0x8000469C`) announces each code file (by overlay id, evicting overlapping ones) before the game decompresses it; the streamed loader (`0x80004838`, a piece per call) announces it on the call that completes it (issue 001: file 57, the battle code, loads only this way); the failed-lookup report (RDRAM at the target, `HH_MISS_DUMP`) |
 | `src/libultra_stubs.cpp` | `__d_to_ll`, `__d_to_ull`, `__f_to_ull`, `__ll_to_d` |
 | `src/si_pak.cpp`, `src/controller_pak.cpp` | Controller Pak at the joybus + 32 KiB store in `controller_pak_1.pak` (Rayman 2), plus a Rumble Pak on the same slot (D6): identify register reads `0x80` after a bank `>= 0x80`, motor writes at block `0x600` → `hh::set_pak_rumble` |
 | `src/spin_yield.cpp` | `hh_yield_in_spin`, called from TOML hooks in busy-waits (Rayman 2) |
@@ -291,7 +291,9 @@ Prefix `HH_`.
 | Variable | Effect |
 |---|---|
 | `HH_INPUT_SCRIPT=<file>` | timed input (`tools/scripts/*.txt`; `2:` prefix = player 2) |
-| `HH_DEBUG_LOADS=1` | every code-file load: id, address, size, files evicted, and the last 6 addresses the thread resolved (the caller chain). A load away from the link address is always reported |
+| `HH_DEBUG_LOADS=1` | every code-file load: id, address, size, files evicted, and the last 6 addresses the thread resolved (the caller chain). A load away from the link address is always reported; `[hh-lzkn]` lines trace every `lzkn64_decompress` call (ROM source, destination, caller chain) |
+| `HH_NO_STREAMED_LOADS=1` | do not wrap the streamed loader `0x80004838` (A/B for issue 001; the first battle then ends in a lookup miss at `0x80379410`) |
+| `HH_MISS_DUMP=<file>` | on a lookup miss, write all 8 MB of RDRAM (host-order 32-bit words) to the file |
 | `HH_FRAME_STATS=1` | display lists per 60 screen updates |
 | `HH_AUDIO_STATS=1` | audio queue depth, silence inserted, peak amplitude, every 2 s |
 | `HH_AUDIO_DUMP=1` | WAV of exactly what is handed to SDL |
